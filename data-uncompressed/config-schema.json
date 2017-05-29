@@ -1,0 +1,110 @@
+{
+	"title": "Config",
+	"type": "object",
+	"properties":
+	{
+		"servo1Time":
+		{
+			"title": "Time to activate Feeder 1 servo",
+			"type": "string",
+			"format": "time",
+			"default": "06:00",
+			"propertyOrder": 10
+		},
+		"servo2Time":
+		{
+			"title": "Time to activate Feeder 2 servo",
+			"type": "string",
+			"format": "time",
+			"default": "18:00",
+			"propertyOrder": 20
+		},
+		"offsetGMT":
+		{
+			"title": "Timezone Offset (seconds)",
+			"type": "integer",
+			"default": -18000,
+			"propertyOrder": 30
+		},
+		"host":
+		{
+			"title": "Host Name",
+			"type": "string",
+			"propertyOrder": 40
+		},
+		"ssid":
+		{
+			"title": "SSID to of the AP connect to",
+			"type": "string",
+			"propertyOrder": 50
+		},
+		"password":
+		{
+			"title": "Password of the AP",
+			"type": "string",
+			"format": "password",
+			"propertyOrder": 60
+		},
+		"timeServer":
+		{
+			"title": "Timeserver",
+			"type": "string",
+			"default": "0.pool.ntp.org",
+			"propertyOrder": 70
+		},
+		"servo1Latched":
+		{
+			"title": "Feeder Servo 1 Latched value",
+			"type": "integer",
+			"default": 10,
+			"minimum": 0,
+			"maximum": 180,
+			"propertyOrder": 80
+		},
+		"servo1Unlatched":
+		{
+			"title": "Feeder Servo 1 Unlatched value",
+			"type": "integer",
+			"default": 90,
+			"minimum": 0,
+			"maximum": 180,
+			"propertyOrder": 90
+		},
+		"servo2Latched":
+		{
+			"title": "Feeder Servo 2 Latched value",
+			"type": "integer",
+			"default": 10,
+			"minimum": 0,
+			"maximum": 180,
+			"propertyOrder": 100
+		},
+		"servo2Unlatched":
+		{
+			"title": "Feeder Servo 2 Unlatched value",
+			"type": "integer",
+			"default": 90,
+			"minimum": 0,
+			"maximum": 180,
+			"propertyOrder": 110
+		},
+		"resetTime":
+		{
+			"title": "Reset the feeder at this time.",
+			"description": "00:00 to disable. NOTE: Both Servos may unlatch during reset.",
+			"type": "string",
+			"format": "time",
+			"default": "00:00",
+			"propertyOrder": 120
+		},
+		"getTime":
+		{
+			"title": "Resync to the time server at this time.",
+			"description": "00:00 to disable.",
+			"type": "string",
+			"format": "time",
+			"default": "02:01",
+			"propertyOrder": 130
+		}
+	}
+}

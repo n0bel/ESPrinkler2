@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>EspFeeder Config</title>
+    <script>
+    /**
+ * IE 5.5+, Firefox, Opera, Chrome, Safari XHR object
+ *
+ * @param string url
+ * @param object callback
+ * @param mixed data
+ * @param null x
+ */
+function ajax(url, callback, data, x) {
+	try {
+		x = new(this.XMLHttpRequest || ActiveXObject)('MSXML2.XMLHTTP.3.0');
+		x.open(data ? 'POST' : 'GET', url, 1);
+		//x.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+		//x.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+		x.onreadystatechange = function () {
+			x.readyState > 3 && callback && callback(x.responseText, x);
+		};
+		x.send(data)
+	} catch (e) {
+		window.console && console.log(e);
+	}
+};
+var config;
+
+function startup()
+{
+  ajax('/config.json',gotConfig);
+}
+function gotConfig(data)
+{
+  config = JSON.parse(data);
+  var e = document.getElementById('ssid');
+  e.value = config.ssid;
+  var e = document.getElementById('password');
+  e.value = config.password;
+
+  console.log('gotconfig');
+
+
+}
+function saveConfig(sdata)
+{
+  var e = document.getElementById('ssid');
+  sdata.ssid = e.value;
+
+  var e = document.getElementById('password');
+  console.log(e.value);
+  sdata.password = e.value;
+  var formData = new FormData();
+  
+  formData.append("data", new Blob([JSON.stringify(sdata)], { type: "text/json" }), "/config.json");
+  ajax('/edit',savedConfig,formData);
+}
+function savedConfig(data)
+{
+  console.log('savedconfig');
+  alert("Saved");
+  window.setTimeout(doRestart,3000);
+}
+function doRestart()
+{
+  ajax('/restart',gotRestart);
+}
+function gotRestart(data)
+{
+  alert(data);
+}
+
+    </script>
+  </head>
+  <body onload="startup();">
+    <table border=0>
+      <tr><td colspan=2 align=center>EspFeeder setup Wifi</td></tr>
+      <tr><td align=right>SSID:</td><td><input name=ssid id=ssid></td></tr>
+      <tr><td align=right>Password:</td><td><input type=password name=password id=password></td></tr>
+      <tr><td colspan=2 align=center><button onclick='saveConfig(config);'>save</button></td></tr>
+    </table>
+  </body>
+</html>

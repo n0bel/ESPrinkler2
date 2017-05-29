@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>EspFeeder Status</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Foundation CSS framework (Bootstrap and jQueryUI also supported) -->
+    <link rel='stylesheet' href='http://cdn.jsdelivr.net/foundation/5.0.2/css/foundation.min.css'>
+    <!-- Font Awesome icons (Bootstrap, Foundation, and jQueryUI also supported) -->
+    <link rel='stylesheet' href='http://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.0.3/css/font-awesome.css'>
+    <script src="http://code.jquery.com/jquery-1.12.4.js"></script>
+	<script>
+    var statusTime;
+    var intervalHandle = null;
+		function getStatus() {
+      if (intervalHandle) window.clearInterval(intervalHandle);
+      $.getJSON('status', function (data) {
+        $( '#s1' ).text(data.servo1);
+  			$( '#s2' ).text(data.servo2);
+        statusTime = data.time;
+        $( '#stime' ).text(new Date(statusTime*1000).toString());
+        intervalHandle = window.setInterval(function(){
+          statusTime++;
+          $( '#stime' ).text(new Date(statusTime*1000).toString());
+        },1000);
+      });
+		}
+		function toggle(which) {
+      $.get('toggle'+which, function () {
+        getStatus();
+      });
+		}
+    $(function () {
+      $.ajaxSetup({ cache: false });
+
+      $( '#ts1' ).click(function() {
+        toggle('1');
+      });
+      $( '#ts2' ).click(function() {
+        toggle('2');
+      });
+      $( '#restart').click(function(){
+        $.get('restart', function(data) {
+          alert(data);
+        });
+      })
+      $( '#refresh').click(function(){
+        getStatus();
+      })
+
+      getStatus();
+    });
+   </script>
+  </head>
+  <body>
+    <div class="row">
+      <div class="large-12 columns">
+        <div class="panel">
+          <h2>EspFeeder</h2>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="large-3 columns">
+        <a href="config.html" class='button tiny'>Go to Config</a>
+      </div>
+      <div class="large-3 columns">
+        <button id='refresh' class='tiny'>Refresh</button>
+      </div>
+      <div class="large-3 columns">
+        <button id='restart' class='tiny'>Restart</button>
+      </div>
+    </div>
+    <div class="row">
+      <div class="small-12 columns">
+        <div class="panel">
+          <h3>Status</h3>
+          <div class="row">
+            <div class="small-12 columns">
+              <div class="panel row">
+                <span class='small-4 columns'>Time</span>
+                <span id='stime' class='small-4 columns'>??????</span>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="small-12 columns">
+              <div class="panel row">
+                <span class='small-4 columns'>Feeder Servo 1</span>
+                <span id='s1' class='small-4 columns'>??????</span>
+                <button id='ts1' class='tiny small-4 columns'>Toggle S1</button>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="small-12 columns">
+              <div class="panel row">
+                <span class='small-4 columns'>Feeder Servo 2</span>
+                <span id='s2' class='small-4 columns'>??????</span>
+                <button id='ts2' class='tiny small-4 columns'>Toggle S2</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

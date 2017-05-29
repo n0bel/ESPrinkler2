@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>EspFeeder Config</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Foundation CSS framework (Bootstrap and jQueryUI also supported) -->
+    <link rel='stylesheet' href='http://cdn.jsdelivr.net/foundation/5.0.2/css/foundation.min.css'>
+    <!-- Font Awesome icons (Bootstrap, Foundation, and jQueryUI also supported) -->
+    <link rel='stylesheet' href='http://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.0.3/css/font-awesome.css'>
+    <script src="http://rawgithub.com/jdorn/json-editor/master/dist/jsoneditor.min.js"></script>
+    <script src="http://code.jquery.com/jquery-1.12.4.js"></script>
+
+  	<script>
+      // Set the default CSS theme and icon library globally
+      JSONEditor.defaults.theme = 'foundation5';
+      JSONEditor.defaults.iconlib = 'fontawesome4';
+      var editor;
+
+  		function getConfig() {
+        //console.log('get config');
+        $.getJSON('config.json', function (data) {
+          editor.setValue(data);
+          //console.log(JSON.stringify(data));
+        });
+  		}
+  		function saveConfig(data)
+  		{
+        $('#save, #save2').prop('disabled',true);
+        var formData = new FormData();
+        formData.append("data", new Blob([data], { type: "text/json" }), "/config.json");
+        $.ajax({
+          url: '/edit',
+          data: formData,
+          processData: false,
+          contentType: false,
+          type: 'POST'
+        }).done(function () { $('#save, #save2').prop('disabled',false); });
+  		}
+
+      $(function () {
+        $.ajaxSetup({ cache: false });
+        editor = new JSONEditor($('#editor_holder')[0],{
+          ajax: true,
+          disable_collapse: true,
+          disable_properties: true,
+          required_by_default: true,
+          remove_empty_properties: false,
+          schema: {
+            $ref: "config-schema.json"
+          }
+        });
+
+        $('#save, #save2').click(function() {
+          //console.log(JSON.stringify(editor.getValue()));
+          saveConfig(JSON.stringify(editor.getValue()));
+        });
+        $('#load, #load2').click(function() {
+          getConfig();
+        });
+
+        editor.on('ready',function() {
+          $( "input[name='root[offsetGMT]']" ).after("<button id='settz'; class='tiny'>Set Timezone from Browser</button>");
+          $( '#settz' ).click(function(){
+            var offset = new Date().getTimezoneOffset() * -60;
+            var d = editor.getValue();
+            d.offsetGMT = offset;
+            editor.setValue(d);
+          })
+          getConfig();
+        });
+
+
+      });
+
+   </script>
+ </head>
+  <body>
+
+    <div class="row">
+      <div class="large-12 columns">
+        <div class="panel">
+          <h2>EspFeeder</h2>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="small-2 columns">
+        <a href="/" class='button tiny'>Go to Main Page</a>
+      </div>
+      <div class="small-2 columns">
+        <a href="/edit.html" class='button tiny'>Go to FS Editor</a>
+      </div>
+    </div>
+    <div class='row'>
+      <div class="small-12 columns">
+          <button id='save' class='tiny'>Save Config</button>
+          <button id='load' class='tiny'>Load Config</button>
+          <div id='editor_holder'></div>
+          <button id='save2' class='tiny'>Save Config</button>
+          <button id='load2' class='tiny'>Load Config</button>
+      </div>
+    </div>
+
+  </body>
+</html>
