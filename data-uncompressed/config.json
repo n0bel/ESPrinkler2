@@ -1,1 +1,1 @@
-{"servo1Time":"06:00","servo2Time":"18:00","offsetGMT":-18000,"host":"ESPrinkler2","ssid":"YOURSSID","password":"YOURPASSWORD","timeServer":"0.pool.ntp.org","servo1Latched":10,"servo1Unlatched":90,"servo2Latched":10,"servo2Unlatched":90,"resetTime":"00:00","getTime":"02:01"}
+{"servo1Time":"06:00","servo2Time":"18:00","offsetGMT":-18000,"host":"EspFeeder","ssid":"YOURSSID","password":"YOURPASSWORD","timeServer":"0.pool.ntp.org","servo1Latched":10,"servo1Unlatched":90,"servo2Latched":10,"servo2Unlatched":90,"resetTime":"00:00","getTime":"02:01"}

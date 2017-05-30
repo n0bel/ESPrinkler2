@@ -8,8 +8,9 @@ import cgi
 s1 = 'unlatched'
 s2 = 'unlatched'
 
-class EspFeederRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
-        def xsend(self,content,contentType="text/html"):
+
+class ESPrinkler2RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
+        def xsend(self, content, contentType="text/html"):
             print "serving custom response: " + content
             self.send_response(200)
             self.send_header("Content-Type", contentType)
@@ -19,46 +20,52 @@ class EspFeederRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             self.wfile.write(content)
 
         def do_GET(self):
-            global s1,s2
-            self.path = self.path.split('?',1)[0]
+            global s1, s2
+            self.path = self.path.split('?', 1)[0]
             print self.path
             if self.path == '/status':
-                v = { 's1': s1, 's2': s2, 'time': int(time.time()) };
-                self.xsend(json.dumps(v),"text/json")
+                v = {'s1': s1, 's2': s2, 'time': int(time.time())}
+                self.xsend(json.dumps(v), "text/json")
             elif self.path == '/toggle1':
-                if s1 == 'unlatched': s1 = 'latched'
-                else: s1 = 'unlatched'
+                if s1 == 'unlatched':
+                    s1 = 'latched'
+                else:
+                    s1 = 'unlatched'
                 self.xsend("ok")
             elif self.path == '/toggle2':
-                if s2 == 'unlatched': s2 = 'latched'
-                else: s2 = 'unlatched'
+                if s2 == 'unlatched':
+                    s2 = 'latched'
+                else:
+                    s2 = 'unlatched'
                 self.xsend("ok")
             elif self.path == '/restart':
-                self.xsend("Restarting... please wait a minute or two and refresh")
+                self.xsend(
+                    "Restarting... please wait a minute or two and refresh")
             elif self.path == '/list':
                 v = []
                 for f in os.listdir('.'):
-                    v.append( { 'type': 'file', 'name': f })
-                self.xsend(json.dumps(v),"text/json")
+                    v.append({'type': 'file', 'name': f})
+                self.xsend(json.dumps(v), "text/json")
             else:
                 return SimpleHTTPServer.SimpleHTTPRequestHandler.do_GET(self)
 
         def do_DELETE(self):
-            self.path = self.path.split('?',1)[0]
+            self.path = self.path.split('?', 1)[0]
             print self.path
             if self.path == '/edit':
                 form = cgi.FieldStorage(
-                fp=self.rfile,
-                headers=self.headers,
-                environ={'REQUEST_METHOD':'POST',
-                         'CONTENT_TYPE':self.headers['Content-Type'],
-                         })
+                    fp=self.rfile,
+                    headers=self.headers,
+                    environ={'REQUEST_METHOD': 'POST',
+                             'CONTENT_TYPE': self.headers['Content-Type'],
+                             })
 
                 for field in form.keys():
                     field_item = form[field]
                     if field == 'path':
-                        fn = form[field].value
-                        if fn.startswith('/'): fn = fn[1:]
+                        fn = field_item.value
+                        if fn.startswith('/'):
+                            fn = fn[1:]
                         if os.path.isfile(fn):
                             os.remove(fn)
                             self.xsend("")
@@ -67,23 +74,24 @@ class EspFeederRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             self.send_response(404)
 
         def do_PUT(self):
-            self.path = self.path.split('?',1)[0]
+            self.path = self.path.split('?', 1)[0]
             print self.path
             if self.path == '/edit':
                 form = cgi.FieldStorage(
-                fp=self.rfile,
-                headers=self.headers,
-                environ={'REQUEST_METHOD':'POST',
-                         'CONTENT_TYPE':self.headers['Content-Type'],
-                         })
+                    fp=self.rfile,
+                    headers=self.headers,
+                    environ={'REQUEST_METHOD': 'POST',
+                             'CONTENT_TYPE': self.headers['Content-Type'],
+                             })
 
                 for field in form.keys():
                     field_item = form[field]
                     if field == 'path':
-                        fn = form[field].value
-                        if fn.startswith('/'): fn = fn[1:]
+                        fn = field_item.value
+                        if fn.startswith('/'):
+                            fn = fn[1:]
                         if not os.path.isfile(fn):
-                            f = open(fn,'w')
+                            f = open(fn, 'w')
                             f.close()
                             self.xsend("")
                             return
@@ -94,18 +102,17 @@ class EspFeederRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
 
             self.send_response(404)
 
-
         def do_POST(self):
-            self.path = self.path.split('?',1)[0]
+            self.path = self.path.split('?', 1)[0]
             print self.path
             if self.path == '/edit':
 
                 form = cgi.FieldStorage(
-                fp=self.rfile,
-                headers=self.headers,
-                environ={'REQUEST_METHOD':'POST',
-                         'CONTENT_TYPE':self.headers['Content-Type'],
-                         })
+                    fp=self.rfile,
+                    headers=self.headers,
+                    environ={'REQUEST_METHOD': 'POST',
+                             'CONTENT_TYPE': self.headers['Content-Type'],
+                             })
 
                 for field in form.keys():
                     field_item = form[field]
@@ -113,12 +120,13 @@ class EspFeederRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
                         # The field contains an uploaded file
                         file_data = field_item.file.read()
                         file_len = len(file_data)
-                        print('Uploaded %s as "%s" (%d bytes)' % \
-                                (field, field_item.filename, file_len))
+                        print('Uploaded %s as "%s" (%d bytes)' %
+                              (field, field_item.filename, file_len))
                         if field == 'data':
                             fn = field_item.filename
-                            if fn.startswith('/'): fn = fn[1:]
-                            f = open(fn,'w')
+                            if fn.startswith('/'):
+                                fn = fn[1:]
+                            f = open(fn, 'w')
                             f.write(file_data)
                             f.close()
                             print 'wrote:'+fn
@@ -132,12 +140,13 @@ class EspFeederRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
                 return SimpleHTTPServer.SimpleHTTPRequestHandler.do_GET(self)
 
 
-#os.chdir("data-uncompressed")
+os.chdir("data-uncompressed")
 PORT = 80
 
-Handler = EspFeederRequestHandler
+Handler = ESPrinkler2RequestHandler
 
 httpd = SocketServer.TCPServer(("", PORT), Handler)
 
 print "serving at port", PORT
+print "serving folder", os.getcwd()
 httpd.serve_forever()

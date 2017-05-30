@@ -1,8 +1,9 @@
 /*
  ESPrinkler2 -- Web Server Enabled Sprinkler Controller
- Base code is https://github.com/esp8266/Arduino/blob/master/libraries/ESP8266WebServer/examples/FSBrowser/FSBrowser.ino
+ https://github.com/n0bel/ESPrinkler2
+ Original Base code is https://github.com/esp8266/Arduino/blob/master/libraries/ESP8266WebServer/examples/FSBrowser/FSBrowser.ino
  Base Code Copyright (c) 2015 Hristo Gochkov. All rights reserved. LGPL
- Code is highly modifed.
+ This Code Copyright (c) 2017 Kevin Uhlir. All rights reserved. LGPL
  This is a rewrite of ESPrinkler https://github.com/n0bel/ESPrinkler but based
  on the Arduino toolchain instead of ExperssIF.  This should make the project
  more accessable to people.
@@ -34,23 +35,15 @@
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
 #include <FS.h>
+#include <stdarg.h>
 
 #include <ArduinoJson.h>
 #include <Servo.h>
 #include <Bounce2.h>
 #include <string.h>
+#include <U8g2lib.h>
 
-#define BUTTON1 2
-#define SERVO1 13
-#define BUTTON2 14
-#define SERVO2 12
-#define TONE 4
-
-Servo servo1;
-Servo servo2;
-
-Bounce button1 = Bounce();
-Bounce button2 = Bounce();
+U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 
 
 #define DBG_OUTPUT_PORT Serial
@@ -140,7 +133,7 @@ String getContentType(String filename){
 bool handleFileRead(String path){
   DBG_OUTPUT_PORT.print(timeNow);
   DBG_OUTPUT_PORT.println(" handleFileRead: " + path);
-  if(path.endsWith("/")) path += apMode?"setup.html":"index.html";
+  if(path.endsWith("/")) path += "index.html";
 
   String contentType = getContentType(path);
   String pathWithGz = path + ".gz";
@@ -298,8 +291,8 @@ void setServos()
 {
   int v1 = servo1State?servo1Latched:servo1Unlatched;
   int v2 = servo2State?servo2Latched:servo2Unlatched;
-  servo1.write(v1);
-  servo2.write(v2);
+//  servo1.write(v1);
+//  servo2.write(v2);
   DBG_OUTPUT_PORT.printf("set servo1=%d servo2=%d\n",v1,v2);
 }
 
@@ -338,11 +331,9 @@ void getNTP()
       {
         DBG_OUTPUT_PORT.println("bad IP, try again");
         delay(1000);
-        tone(TONE,500,50);
         continue;
       }
     }
-    tone(TONE,500,50);
     DBG_OUTPUT_PORT.println("sending NTP packet...");
     // set all bytes in the buffer to 0
     memset(packetBuffer, 0, NTP_PACKET_SIZE);
@@ -426,14 +417,47 @@ void getNTP()
 
 }
 
+void displayStatus(int line, const char *fmt, ...)
+{
+
+  int count;
+  char *buffer;
+  va_list Arglist;
+
+  count = 0;
+  buffer = (char*)malloc(128);
+  if(buffer == NULL)return;
+  va_start(Arglist,fmt);
+  vsnprintf(buffer,128,fmt,Arglist);
+
+  u8g2.setDrawColor(0);
+  u8g2.drawBox(0,line*12,128,12);
+  u8g2.setDrawColor(1);
+  u8g2.drawStr(0,line*12,buffer);
+  u8g2.sendBuffer();
+  free(buffer);
+
+}
+
 void setup(void){
 
 
   apMode = false;
+
+  pinMode(BUILTIN_LED, OUTPUT);
+
   DBG_OUTPUT_PORT.begin(74880);
   DBG_OUTPUT_PORT.print("\n");
   DBG_OUTPUT_PORT.setDebugOutput(true);
 
+  u8g2.begin();
+  u8g2.setFont(u8g2_font_helvR08_tf);
+  u8g2.setFontRefHeightExtendedText();
+  u8g2.setDrawColor(1);
+  u8g2.setFontPosTop();
+  u8g2.setFontDirection(0);
+  u8g2.clearBuffer();
+  displayStatus(0, "Start...");
 
 
   SPIFFS.begin();
@@ -451,18 +475,22 @@ void setup(void){
 
   //WIFI INIT
 
-  WiFi.mode(WIFI_STA);
+  WiFi.mode(WIFI_AP_STA);
 
   time_t wifims = millis();
 
   DBG_OUTPUT_PORT.printf("Connecting to %s\n", ssid);
+  displayStatus(0, "Conn %s", ssid);
 
   WiFi.begin(ssid, password);
 
+  bool ledtoggle = false;
   while (WiFi.status() != WL_CONNECTED) {
+    ledtoggle = !ledtoggle;
+    digitalWrite(BUILTIN_LED, ledtoggle?HIGH:LOW);
     delay(500);
     DBG_OUTPUT_PORT.print(".");
-    tone(TONE,300,50);
+    displayStatus(0, "Conn %s %d", ssid, (millis() - wifims) / 1000);
     if ((millis() - wifims) > 60 * 1000) // 60 seconds of no wifi connect
     {
       break;
@@ -483,26 +511,20 @@ void setup(void){
     DBG_OUTPUT_PORT.print("SoftAP ssid:");
     DBG_OUTPUT_PORT.println(ssid);
     WiFi.softAP(ssid);
-    delay(1000);
-    tone(TONE,1000,50);
-    delay(50);
-    tone(TONE,500,50);
-    delay(50);
-    tone(TONE,300,50);
     DBG_OUTPUT_PORT.println("");
     DBG_OUTPUT_PORT.print("AP mode. IP address: ");
     DBG_OUTPUT_PORT.println(WiFi.softAPIP());
+    displayStatus(0, "AP mode Set");
+    displayStatus(1, "%s",ssid);
+    displayStatus(2, "IP:%s",WiFi.softAPIP().toString().c_str());
   }
   else
   {
-    tone(TONE,300,50);
-    delay(50);
-    tone(TONE,500,50);
-    delay(50);
-    tone(TONE,1000,1000);
+    digitalWrite(BUILTIN_LED, ledtoggle?HIGH:LOW);
     DBG_OUTPUT_PORT.println("");
     DBG_OUTPUT_PORT.print("Connected! IP address: ");
     DBG_OUTPUT_PORT.println(WiFi.localIP());
+    displayStatus(0, "%s %s",WiFi.localIP().toString().c_str(),ssid);
   }
 
   MDNS.begin(host);
@@ -532,19 +554,6 @@ void setup(void){
     getNTP();
 
   }
-  servo1.attach(SERVO1);
-  pinMode(BUTTON1,INPUT_PULLUP);
-  button1.attach(BUTTON1);
-  button1.interval(100);
-
-  servo2.attach(SERVO2);
-  pinMode(BUTTON2,INPUT_PULLUP);
-  button2.attach(BUTTON2);
-  button2.interval(100);
-
-  setServos();
-
-  pinMode(TONE,OUTPUT);
 
   //SERVER INIT
   //list directory
@@ -608,22 +617,6 @@ void loop(void){
 // deal with http server.
   server.handleClient();
 
-// handle buttons
-  button1.update();
-  button2.update();
-
-  if (button1.fell())
-  {
-    servo1State = !servo1State;
-    setServos();
-  }
-
-
-  if (button2.fell())
-  {
-    servo2State = !servo2State;
-    setServos();
-  }
 
 // keep track of the time
   if (!apMode && ms != millis())
