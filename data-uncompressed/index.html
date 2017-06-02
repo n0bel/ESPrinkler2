@@ -2,21 +2,36 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>EspFeeder Status</title>
+    <title>ESPrinkler2 Status</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <!-- Foundation CSS framework (Bootstrap and jQueryUI also supported) -->
     <link rel='stylesheet' href='/foundation.min.css'>
-    <!-- Font Awesome icons (Bootstrap, Foundation, and jQueryUI also supported) -->
-    <link rel='stylesheet' href='/font-awesome.css'>
-    <script src="/jquery-1.12.4.js"></script>
+    <script src="/jquery-3.2.1.min.js"></script>
+    <style>
+    .radius { border-radius: 3px; }
+    .button { border-radius: 5px; }
+    .callout { background-color: #ddd; }
+    </style>
 	<script>
     var statusTime;
     var intervalHandle = null;
 		function getStatus() {
       if (intervalHandle) window.clearInterval(intervalHandle);
       $.getJSON('status', function (data) {
-        $( '#s1' ).text(data.servo1);
-  			$( '#s2' ).text(data.servo2);
+        for (i = 0; i < 8; i++)
+        {
+          let b = $( '#zs' + i );
+          if (data['zone'+i] == 'on')
+          {
+            b.removeClass('success')
+            b.addClass('alert')
+          }
+          else
+          {
+            b.removeClass('alert')
+            b.addClass('success')
+          }
+        }
         statusTime = data.time;
         $( '#stime' ).text(new Date(statusTime*1000).toString());
         intervalHandle = window.setInterval(function(){
@@ -26,18 +41,18 @@
       });
 		}
 		function toggle(which) {
-      $.get('toggle'+which, function () {
+      $.get('/toggle',{ zone: which }, function () {
         getStatus();
       });
 		}
     $(function () {
       $.ajaxSetup({ cache: false });
 
-      $( '#ts1' ).click(function() {
-        toggle('1');
-      });
-      $( '#ts2' ).click(function() {
-        toggle('2');
+      $('button').filter(function(){
+        return this.id.match(/^zs([\d])/);
+      }).click(function() {
+        let mm = this.id.match(/^zs([\d])/);
+        toggle(mm[1]);
       });
       $( '#restart').click(function(){
         $.get('restart', function(data) {
@@ -56,19 +71,19 @@
     <div class="row">
       <div class="large-12 columns">
         <div class="panel">
-          <h2>EspFeeder</h2>
+          <h2>ESPrinkler2</h2>
         </div>
       </div>
     </div>
-    <div class="row">
-      <div class="large-3 columns">
-        <a href="config.html" class='button tiny'>Go to Config</a>
+    <div class="row" >
+      <div class="small-3 columns">
+        <a href="config.html" class='button'>Go to Config</a>
       </div>
-      <div class="large-3 columns">
-        <button id='refresh' class='tiny'>Refresh</button>
+      <div class="small-3 columns">
+        <button id='refresh' class='button'>Refresh</button>
       </div>
-      <div class="large-3 columns">
-        <button id='restart' class='tiny'>Restart</button>
+      <div class="small-3 columns">
+        <button id='restart' class='button'>Restart</button>
       </div>
     </div>
     <div class="row">
@@ -76,28 +91,42 @@
         <div class="panel">
           <h3>Status</h3>
           <div class="row">
-            <div class="small-12 columns">
-              <div class="panel row">
-                <span class='small-4 columns'>Time</span>
-                <span id='stime' class='small-4 columns'>??????</span>
+            <div class="small-12 columns panel callout radius">
+              <div class="row">
+                <span class='small-4 columns '>Time</span>
+                <span id='stime' class='small-8 columns'>??????</span>
               </div>
             </div>
           </div>
           <div class="row">
-            <div class="small-12 columns">
-              <div class="panel row">
-                <span class='small-4 columns'>Feeder Servo 1</span>
-                <span id='s1' class='small-4 columns'>??????</span>
-                <button id='ts1' class='tiny small-4 columns'>Toggle S1</button>
+            <div class="small-12 columns panel callout  radius ">
+              <div class="row small-up-4 ">
+                <div class="column column-block text-center">
+                  <button id='zs0' class='button'>Toggle Zone 1</button>
+                </div>
+                <div class="column column-block text-center">
+                  <button id='zs1' class='button'>Toggle Zone 2</button>
+                </div>
+                <div class="column column-block text-center">
+                  <button id='zs2' class='button'>Toggle Zone 3</button>
+                </div>
+                <div class="column column-block text-center">
+                  <button id='zs3' class='button'>Toggle Zone 4</button>
+                </div>
               </div>
-            </div>
-          </div>
-          <div class="row">
-            <div class="small-12 columns">
-              <div class="panel row">
-                <span class='small-4 columns'>Feeder Servo 2</span>
-                <span id='s2' class='small-4 columns'>??????</span>
-                <button id='ts2' class='tiny small-4 columns'>Toggle S2</button>
+              <div class="row small-up-4 ">
+                <div class="column column-block text-center">
+                  <button id='zs4' class='button'>Toggle Zone 5</button>
+                </div>
+                <div class="column column-block text-center">
+                  <button id='zs5' class='button'>Toggle Zone 6</button>
+                </div>
+                <div class="column column-block text-center">
+                  <button id='zs6' class='button'>Toggle Zone 7</button>
+                </div>
+                <div class="column column-block text-center">
+                  <button id='zs7' class='button'>Toggle Zone 8</button>
+                </div>
               </div>
             </div>
           </div>

@@ -1,12 +1,15 @@
 import SimpleHTTPServer
+from urlparse import urlparse, parse_qs
 import SocketServer
 import os
 import time
 import json
 import cgi
 
-s1 = 'unlatched'
-s2 = 'unlatched'
+zones = [
+        'off', 'off', 'off', 'off',
+        'off', 'off', 'off', 'off'
+        ]
 
 
 class ESPrinkler2RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
@@ -20,23 +23,29 @@ class ESPrinkler2RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             self.wfile.write(content)
 
         def do_GET(self):
-            global s1, s2
+            global zones
+            print self.path
+            query_components = parse_qs(urlparse(self.path).query)
             self.path = self.path.split('?', 1)[0]
             print self.path
             if self.path == '/status':
-                v = {'s1': s1, 's2': s2, 'time': int(time.time())}
+                v = {'time': int(time.time())}
+                for i in range(0, 8):
+                    v['zone'+str(i)] = zones[i]
                 self.xsend(json.dumps(v), "text/json")
-            elif self.path == '/toggle1':
-                if s1 == 'unlatched':
-                    s1 = 'latched'
+            elif self.path == '/toggle':
+                i = 0
+                try:
+                    i = int(query_components['zone'][0])
+                except:
+                    pass
+                print i
+                z = zones[i]
+                if z == 'on':
+                    z = 'off'
                 else:
-                    s1 = 'unlatched'
-                self.xsend("ok")
-            elif self.path == '/toggle2':
-                if s2 == 'unlatched':
-                    s2 = 'latched'
-                else:
-                    s2 = 'unlatched'
+                    z = 'on'
+                zones[i] = z
                 self.xsend("ok")
             elif self.path == '/restart':
                 self.xsend(

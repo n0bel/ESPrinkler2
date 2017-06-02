@@ -2,19 +2,21 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>EspFeeder Config</title>
+    <title>ESPrinkler2 Config</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <!-- Foundation CSS framework (Bootstrap and jQueryUI also supported) -->
     <link rel='stylesheet' href='/foundation.min.css'>
-    <!-- Font Awesome icons (Bootstrap, Foundation, and jQueryUI also supported) -->
-    <link rel='stylesheet' href='/font-awesome.css'>
     <script src="/jsoneditor.min.js"></script>
-    <script src="/jquery-1.12.4.js"></script>
-
+    <script src="/jquery-3.2.1.min.js"></script>
+    <style>
+    .radius { border-radius: 3px; }
+    .button { border-radius: 5px; }
+    .callout { background-color: #ddd; }
+    </style>
   	<script>
       // Set the default CSS theme and icon library globally
       JSONEditor.defaults.theme = 'foundation5';
-      JSONEditor.defaults.iconlib = 'fontawesome4';
+
       var editor;
 
   		function getConfig() {
@@ -55,8 +57,15 @@
           //console.log(JSON.stringify(editor.getValue()));
           saveConfig(JSON.stringify(editor.getValue()));
         });
+
         $('#load, #load2').click(function() {
           getConfig();
+        });
+
+        $( '#restart, #restart2').click(function(){
+          $.get('restart', function(data) {
+            alert(data);
+          });
         });
 
         editor.on('ready',function() {
@@ -80,25 +89,27 @@
     <div class="row">
       <div class="large-12 columns">
         <div class="panel">
-          <h2>EspFeeder</h2>
+          <h2>ESPrinkler2</h2>
         </div>
       </div>
     </div>
     <div class="row">
       <div class="small-2 columns">
-        <a href="/" class='button tiny'>Go to Main Page</a>
+        <a href="/" class='button'>Go to Main Page</a>
       </div>
       <div class="small-2 columns">
-        <a href="/edit.html" class='button tiny'>Go to FS Editor</a>
+        <a href="/edit.html" class='button'>Go to FS Editor</a>
       </div>
     </div>
     <div class='row'>
       <div class="small-12 columns">
-          <button id='save' class='tiny'>Save Config</button>
-          <button id='load' class='tiny'>Load Config</button>
-          <div id='editor_holder'></div>
-          <button id='save2' class='tiny'>Save Config</button>
-          <button id='load2' class='tiny'>Load Config</button>
+          <button id='save' class='button tiny'>Save Config</button>
+          <button id='load' class='button tiny'>Load Config</button>
+          <button id='restart' class='button tiny'>Restart</button>
+          <div id='editor_holder' class="panel callout radius"></div>
+          <button id='save2' class='button tiny'>Save Config</button>
+          <button id='load2' class='button tiny'>Load Config</button>
+          <button id='restart2' class='button tiny'>Restart</button>
       </div>
     </div>
 

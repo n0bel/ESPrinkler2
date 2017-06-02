@@ -4,16 +4,17 @@
  Also I only tested on Windows
  */
 
-
-var path_to_arduino = '..\\..\\..\\ides\\arduino-1.6.11\\arduino_debug.exe';
-var path_to_mkspiffs = '..\\..\\..\\ides\\arduino-1.6.11\\portable\\packages\\esp8266\\tools\\mkspiffs\\0.1.2\\mkspiffs.exe';
-var path_to_esptool = '..\\..\\..\\ides\\arduino-1.6.11\\portable\\packages\\esp8266\\tools\\esptool\\0.4.9\\esptool.exe';
+var path_arduino = '..\\..\\..\\ides\\arduino-1.6.11\\';
+var path_to_arduino = path_arduino + 'arduino_debug.exe';
+var path_to_mkspiffs = path_arduino + 'portable\\packages\\esp8266\\tools\\mkspiffs\\0.1.2\\mkspiffs.exe';
+var path_to_esptool = path_arduino + 'portable\\packages\\esp8266\\tools\\esptool\\0.4.9\\esptool.exe';
 var path_to_terminal = '..\\..\\..\\terminal\\termite.exe';
 var path_to_terminal_ini = '..\\..\\..\\terminal\\termite.ini';
 var path_to_gzip = '..\\..\\..\\Utility\\gzip.exe';
 var port = 'COM4';
 var terminalBaud = '74880';
-var resetMethod = 'nodemcu'
+var resetMethod = 'nodemcu';
+var terminal_process = null;
 
 var board = {
   package: 'esp8266',
@@ -56,11 +57,11 @@ function arduinoBoardString(b)
 
 var xargs =  [ "--board", arduinoBoardString(board) , "--port", port, '-v', '--pref', 'build.path={PROJECT_PATH}/build', '{FILE_ACTIVE}' ];
 
-var functionMatch = function(output) {
+function functionMatch(output) {
   const error = /^(..[^:]+):(\d+):\s+(\w+:\s.*)$/;
   const error2 = /^(..[^:]+):(\d+):(\d+):\s+(\w+:\s.*)$/;
   // this is the list of error matches that atom-build will process
-  const array = [];
+  let array = [];
   // iterate over the output by lines
   output.split(/[\r\n]/).forEach(line => {
     // process possible error messages
@@ -89,6 +90,7 @@ var functionMatch = function(output) {
       }
     }
   });
+  console.log(array);
   return array;
 }
 
@@ -108,25 +110,24 @@ var terminal_start = function(buildOutcome, stdout, stderr)
     "ForwardPort=\n"+
     "[Options]\n"+
     "Window=1355 101 496 364\n"+
+    "AppendLine=2\n"+
     "";
   fs.writeFileSync(this.cwd+'/'+path_to_terminal_ini,tsettings);
-  let child = require('child_process').spawn(
+  terminal_process = require('child_process').spawn(
     'cmd',
     [ '/C', path_to_terminal],
     { cwd: this.cwd, env: this.env }
   );
-  global.xyzzy_terminal_child = child;
   return true;
 }
 
 var terminal_kill = function()
 {
-  if (global.xyzzy_terminal_child) {
-    global.xyzzy_terminal_child.removeAllListeners();
-    require('child_process').exec(
-      'taskkill /pid ' + global.xyzzy_terminal_child.pid + ' /T /F '
-    );
-    global.xyzzy_terminal_child = null;
+  if (terminal_process) {
+    terminal_process.removeAllListeners();
+    let tk = require(atom.packages.loadedPackages.build.path + '/node_modules/tree-kill');
+    tk(terminal_process.pid,'SIGKILL');
+    terminal_process = null;
     let fs = require('fs');
     if (fs.existsSync(this.cwd+'/'+path_to_terminal_ini))
       fs.unlinkSync(this.cwd+'/'+path_to_terminal_ini);
@@ -165,11 +166,25 @@ module.exports = {
       cmd: 'echo Prep and Upload spiffs',
       preBuild: terminal_kill,
       args: [
-        '&&', 'copy {PROJECT_PATH}\\data-uncompressed\\* {PROJECT_PATH}\\data\\',
-        '&&', path_to_gzip, '-v -f {PROJECT_PATH}/data/*.html {PROJECT_PATH}/data/*.css {PROJECT_PATH}/data/*.js',
-        '&&', path_to_gzip, '-v -f {PROJECT_PATH}/data/config-schema.json',
-        '&&', path_to_mkspiffs, '-c', '{PROJECT_PATH}/data', '-p', spiffs.spiPage, '-b', spiffs.spiBlock, '-s',  (spiffs.spiEnd - spiffs.spiStart), '{PROJECT_PATH}/build/spiffs.bin',
-        '&&', path_to_esptool, '-vv', "-cd", resetMethod, "-cb", board.parameters.UploadSpeed, "-cp", port, "-ca", '0x'+spiffs.spiStart.toString(16), "-cf", '{PROJECT_PATH}/build/spiffs.bin'
+        '&&', 'xcopy data-uncompressed\\* data\\ /s /y',
+        '&&', path_to_gzip, '-v', '-f',
+            'data/*.html',
+            'data/*.css',
+            'data/*.js',
+            'data/*-schema.json',
+        '&&', path_to_mkspiffs,
+            '-c', 'data',
+            '-p', spiffs.spiPage,
+            '-b', spiffs.spiBlock,
+            '-s',  (spiffs.spiEnd - spiffs.spiStart),
+            'build/spiffs.bin',
+        '&&', path_to_esptool,
+            '-vv',
+            "-cd", resetMethod,
+            "-cb", board.parameters.UploadSpeed,
+            "-cp", port,
+            "-ca", '0x'+spiffs.spiStart.toString(16),
+            "-cf", '{PROJECT_PATH}/build/spiffs.bin'
        ]
     },
     terminal:

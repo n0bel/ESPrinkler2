@@ -34,14 +34,15 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
+#include <NtpClientLib.h>
 #include <FS.h>
 #include <stdarg.h>
 
 #include <ArduinoJson.h>
-#include <Servo.h>
-#include <Bounce2.h>
 #include <string.h>
 #include <U8g2lib.h>
+#include <SimpleTimer.h>
+#include <SPI.h>
 
 U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 
@@ -58,34 +59,23 @@ char host[31] = { "ESPrinkler2" };          // The host name for .local (mdns) h
 
 int offsetGMT = -18000;       // Local timezone offset in seconds
 char offsetGMTstring[10] = { "-18000" };
-int servo1State = true;       // current servo state (true = latched)
-int servo1Latched = 10;       // The servo value to set when latched
-int servo1Unlatched = 90;     // The servo value to set when unlatched
-int servo2State = true;       // current servo state (true = latched)
-int servo2Latched = 10;       // The servo value to set when latched
-int servo2Unlatched = 90;     // The servo value to set when unlatched
-char servo1Time[10];          // Time string (HH:MM 24hr time) when to unlatch (feed the pet)
-int servo1hour = 6;           // The time string hour is parsed to this variable
-int servo1Minute = 0;         // The time string minute is parsed to this variable
-char servo2Time[10];          // Time string (HH:MM 24hr time) when to unlatch (feed the pet)
-int servo2hour = 18;          // The time string hour is parsed to this variable
-int servo2Minute = 0;         // The time string minute is parsed to this variable
+int relayState = 0;           // The current state of the relayState
 
-int apMode = false;           // Are we in Acess Point mode?
+bool apMode = false;           // Are we in Acess Point mode?
 
 char timeServer[31] = { "0.pool.ntp.org" };   // the NTP timeServer to use
 char getTime[10] = { "02:01" };               // what time to resync with the NTP server
 int getHour = 2;                              // parsed hour of above
 int getMinute = 1;                            // parsed minute of above
-char resetTime[10] = { "00:00" };             // what time to auto reset (note the servos may unlatch) 00:00=no reset
+char resetTime[10] = { "00:00" };             // what time to auto reset 00:00=no reset
 int resetHour = 0;                            // parsed hour of above
 int resetMinute = 0;                          // parsed minute of above
 
 
 ESP8266WebServer server(80);  // The Web Server
 File fsUploadFile;            //holds the current upload when files are uploaded (see edit.htm)
-
 WiFiUDP udp;
+SimpleTimer timer;
 
 IPAddress timeServerIP;
 unsigned int localPort = 2390; // local port to listen for UDP packets
@@ -168,7 +158,6 @@ void handleFileUpload(){
     if (upload.filename == configFile)
     {
       loadConfig();
-      setServos();
     }
   }
 }
@@ -250,22 +239,11 @@ void loadConfig()
       if (root.containsKey("password")) strncpy(password,root["password"],30);
       if (root.containsKey("host")) strncpy(host,root["host"],30);
       if (root.containsKey("timeServer")) strncpy(timeServer,root["timeServer"],30);
-      if (root.containsKey("servo1Latched")) servo1Latched = root["servo1Latched"];
-      if (root.containsKey("servo1Unlatched")) servo1Unlatched = root["servo1Unlatched"];
-      if (root.containsKey("servo2Latched")) servo2Latched = root["servo2Latched"];
-      if (root.containsKey("servo2Unlatched")) servo2Unlatched = root["servo2Unlatched"];
-      if (root.containsKey("servo1Time")) strncpy(servo1Time,root["servo1Time"],10);
-      if (root.containsKey("servo2Time")) strncpy(servo2Time,root["servo2Time"],10);
       if (root.containsKey("getTime")) strncpy(getTime,root["getTime"],10);
       if (root.containsKey("resetTime")) strncpy(resetTime,root["resetTime"],10);
 
       if (root.containsKey("offsetGMT")) strncpy(offsetGMTstring,root["offsetGMT"],10);
       offsetGMT = atoi(offsetGMTstring);
-
-      servo1hour = atoi(servo1Time);
-      if (strchr(servo1Time,':')) servo1Minute = atoi(strchr(servo1Time,':')+1);
-      servo2hour = atoi(servo2Time);
-      if (strchr(servo2Time,':')) servo2Minute = atoi(strchr(servo2Time,':')+1);
 
       getHour = atoi(getTime);
       if (strchr(getTime,':')) getMinute = atoi(strchr(getTime,':')+1);
@@ -273,8 +251,6 @@ void loadConfig()
       if (strchr(resetTime,':')) resetMinute = atoi(strchr(resetTime,':')+1);
 
       DBG_OUTPUT_PORT.printf("Config: host: %s ssid: %s timeServer: %s\n",host,ssid,timeServer);
-      DBG_OUTPUT_PORT.printf("servo1Time: %s %d %d servo2Time:%s %d %d servo1:%d %d servo2:%d %d\n",
-        servo1Time, servo1hour, servo1Minute, servo2Time, servo2hour, servo2Minute, servo1Latched, servo1Unlatched, servo2Latched, servo2Unlatched);
       DBG_OUTPUT_PORT.printf("getTime: %s %d %d resetTime:%s %d %d offsetGMT:%d\n",
         getTime, getHour, getMinute, resetTime, resetHour, resetMinute, offsetGMT);
 
@@ -287,13 +263,32 @@ void loadConfig()
 }
 
 
-void setServos()
+void setRelays()
 {
-  int v1 = servo1State?servo1Latched:servo1Unlatched;
-  int v2 = servo2State?servo2Latched:servo2Unlatched;
-//  servo1.write(v1);
-//  servo2.write(v2);
-  DBG_OUTPUT_PORT.printf("set servo1=%d servo2=%d\n",v1,v2);
+  DBG_OUTPUT_PORT.printf("set relays=%02x\n",relayState);
+  SPI.transfer(relayState);
+  u8g2.setDrawColor(0);
+  u8g2.drawBox(0,64-12,128,12);
+  for (int i = 0; i < 8; i++)
+  {
+    if (relayState & (1<<i))
+    {
+      u8g2.setDrawColor(1);
+      u8g2.drawBox(i*16+2,64-12,12,12);
+      u8g2.setDrawColor(0);
+      u8g2.drawGlyph(i*16+6,64-11,i+'1');
+    }
+    else
+    {
+      u8g2.setDrawColor(0);
+      u8g2.drawBox(i*16+2,64-12,12,12);
+      u8g2.setDrawColor(1);
+      u8g2.drawGlyph(i*16+6,64-11,i+'1');
+    }
+
+  }
+  u8g2.sendBuffer();
+
 }
 
 void getNTP()
@@ -439,16 +434,176 @@ void displayStatus(int line, const char *fmt, ...)
 
 }
 
+int clearTimedFunc(int *id)
+{
+  if (*id > 0)
+  {
+    timer.disable(*id);
+    timer.deleteTimer(*id);
+  }
+  *id = -1;
+}
+int setTimedFunc(bool repeat, int *id, long t, void (*func)())
+{
+  if (*id > 0)
+  {
+    timer.disable(*id);
+    timer.deleteTimer(*id);
+  }
+  *id = -1;
+  if (t > 0)
+  {
+    if (repeat)
+    {
+      *id = timer.setInterval(t,func);
+    }
+    else
+    {
+      *id = timer.setTimeout(t,func);
+    }
+  }
+}
+
+// LED CONTROL
+int blinkerTimerId = -1;
+#define setBlinker(t) setTimedFunc(true,&blinkerTimerId,t,blinker)
+void blinker()
+{
+  static bool onoff = false;
+  onoff = !onoff;
+  digitalWrite(BUILTIN_LED,onoff?HIGH:LOW);
+
+}
+
+// mdns
+bool mdnsStarted = false;
+void startMDNS()
+{
+  if (mdnsStarted) return;
+  mdnsStarted = true;
+  MDNS.begin(host);
+  DBG_OUTPUT_PORT.printf("MDNS Starting\r\nOpen http://%s.local or http://%s/\r\n",
+    host, apMode? WiFi.softAPIP().toString().c_str() : WiFi.localIP().toString().c_str());
+}
+
+// NTP Enable/Disabled
+bool ntpStarted = false;
+void startNTP()
+{
+    if (ntpStarted) return;
+    ntpStarted = true;
+    // NTP init
+    if (!apMode)    // if we're in AP Mode we have no internet, so no NTP
+    {
+      DBG_OUTPUT_PORT.println("Starting UDP for NTP");
+      udp.begin(localPort);
+      DBG_OUTPUT_PORT.print("Local port: ");
+      DBG_OUTPUT_PORT.println(udp.localPort());
+
+      delay(1000);
+
+      getNTP();
+
+    }
+}
+void stopNTP()
+{
+
+}
+
+// WIFI STATUS CHANGES
+int apModeTimerId = -1;
+int staModeTimerId = -1;
+#define setApModeTimeout(t) setTimedFunc(false,&apModeTimerId,t,apModeTimeout)
+#define setStaModeTimeout(t) setTimedFunc(false,&staModeTimerId,t,staModeTimeout)
+void apModeTimeout()
+{
+  DBG_OUTPUT_PORT.printf("apModeTimeout\r\n");
+  apModeTimerId = -1;
+  setApMode(true);
+  setBlinker(100);
+  setStaModeTimeout(600000);
+}
+
+void staModeTimeout()
+{
+  DBG_OUTPUT_PORT.printf("staModeTimeout\r\n");
+  staModeTimerId = -1;
+  setApMode(false);
+  setBlinker(50);
+  setApModeTimeout(60000);
+}
+
+
+void setApMode(bool mode)
+{
+    if (apMode == mode) return;
+    apMode = mode;
+    if (apMode)
+    {
+      DBG_OUTPUT_PORT.println("\ngoing to AP mode ");
+      WiFi.disconnect();
+      delay(500);
+      WiFi.mode(WIFI_AP);
+      apMode = true;
+      uint8_t mac[6];
+      delay(500);
+      WiFi.softAPmacAddress(mac);
+      delay(500);
+      sprintf(ssid,"%s_%02x%02x%02x",host,mac[3],mac[4],mac[5]);   // making a nice unique SSID
+      DBG_OUTPUT_PORT.print("SoftAP ssid:");
+      DBG_OUTPUT_PORT.println(ssid);
+      WiFi.softAP(ssid);
+      DBG_OUTPUT_PORT.println("");
+      DBG_OUTPUT_PORT.print("AP mode. IP address: ");
+      DBG_OUTPUT_PORT.println(WiFi.softAPIP());
+      displayStatus(0, "AP:%s",WiFi.softAPIP().toString().c_str());
+    }
+    else
+    {
+      DBG_OUTPUT_PORT.printf("going to STA mode %s\n", ssid);
+      displayStatus(0, "Try: %s", ssid);
+      WiFi.mode(WIFI_STA);
+      delay(500);
+      WiFi.begin(ssid, password);
+    }
+}
+
+WiFiEventHandler onSTAGotIPHandler;
+void onSTAGotIP(WiFiEventStationModeGotIP ipInfo) {
+  DBG_OUTPUT_PORT.printf("Got IP: %s\r\n", ipInfo.ip.toString().c_str());
+  displayStatus(0, "STA:%s %s %d",WiFi.localIP().toString().c_str(),ssid,WiFi.RSSI());
+  setApModeTimeout(0);
+  setBlinker(500);
+  timer.setTimeout(1000,startMDNS);
+  timer.setTimeout(2000,startNTP);
+}
+
+WiFiEventHandler onSTADisconnectedHandler;
+void onSTADisconnected(WiFiEventStationModeDisconnected event_info) {
+  Serial.printf("Disconnected from SSID: %s Reason: %d\n", event_info.ssid.c_str(),event_info.reason);
+  displayStatus(0, "DIS:%s %d",event_info.ssid.c_str(),event_info.reason);
+  setBlinker(50);
+  if (apModeTimerId < 0) setApModeTimeout(600000);
+  timer.setTimeout(20,stopNTP);
+}
+
 void setup(void){
 
-
-  apMode = false;
-
   pinMode(BUILTIN_LED, OUTPUT);
+  setBlinker(50);
+
+  SPI.setDataMode(SPI_MODE0);
+  SPI.setBitOrder(MSBFIRST);
+  SPI.setClockDivider(SPI_CLOCK_DIV16);
+  SPI.setHwCs(true);
+  SPI.begin();
+  SPI.transfer(relayState);
 
   DBG_OUTPUT_PORT.begin(74880);
   DBG_OUTPUT_PORT.print("\n");
   DBG_OUTPUT_PORT.setDebugOutput(true);
+
 
   u8g2.begin();
   u8g2.setFont(u8g2_font_helvR08_tf);
@@ -473,89 +628,19 @@ void setup(void){
 
   loadConfig();
 
+  setRelays();
+
   //WIFI INIT
 
-  WiFi.mode(WIFI_AP_STA);
+  onSTAGotIPHandler = WiFi.onStationModeGotIP(onSTAGotIP);
+  onSTADisconnectedHandler = WiFi.onStationModeDisconnected(onSTADisconnected);
+  WiFi.persistent(false);
+  apMode=true; // forced mode change
+  setApMode(false);
+  setApModeTimeout(60000);
 
-  time_t wifims = millis();
 
-  DBG_OUTPUT_PORT.printf("Connecting to %s\n", ssid);
-  displayStatus(0, "Conn %s", ssid);
-
-  WiFi.begin(ssid, password);
-
-  bool ledtoggle = false;
-  while (WiFi.status() != WL_CONNECTED) {
-    ledtoggle = !ledtoggle;
-    digitalWrite(BUILTIN_LED, ledtoggle?HIGH:LOW);
-    delay(500);
-    DBG_OUTPUT_PORT.print(".");
-    displayStatus(0, "Conn %s %d", ssid, (millis() - wifims) / 1000);
-    if ((millis() - wifims) > 60 * 1000) // 60 seconds of no wifi connect
-    {
-      break;
-    }
-  }
-  if (WiFi.status() != WL_CONNECTED)
-  {
-    DBG_OUTPUT_PORT.println("\ngoing to AP mode ");
-    delay(500);
-    WiFi.mode(WIFI_AP);
-    delay(500);
-    apMode = true;
-    uint8_t mac[6];
-    delay(500);
-    WiFi.softAPmacAddress(mac);
-    delay(500);
-    sprintf(ssid,"ESPrinkler2_%02x%02x%02x",mac[3],mac[4],mac[5]);   // making a nice unique SSID
-    DBG_OUTPUT_PORT.print("SoftAP ssid:");
-    DBG_OUTPUT_PORT.println(ssid);
-    WiFi.softAP(ssid);
-    DBG_OUTPUT_PORT.println("");
-    DBG_OUTPUT_PORT.print("AP mode. IP address: ");
-    DBG_OUTPUT_PORT.println(WiFi.softAPIP());
-    displayStatus(0, "AP mode Set");
-    displayStatus(1, "%s",ssid);
-    displayStatus(2, "IP:%s",WiFi.softAPIP().toString().c_str());
-  }
-  else
-  {
-    digitalWrite(BUILTIN_LED, ledtoggle?HIGH:LOW);
-    DBG_OUTPUT_PORT.println("");
-    DBG_OUTPUT_PORT.print("Connected! IP address: ");
-    DBG_OUTPUT_PORT.println(WiFi.localIP());
-    displayStatus(0, "%s %s",WiFi.localIP().toString().c_str(),ssid);
-  }
-
-  MDNS.begin(host);
-  DBG_OUTPUT_PORT.print("Open http://");
-  DBG_OUTPUT_PORT.print(host);
-  DBG_OUTPUT_PORT.print(".local/ or http://");
-  if (apMode)
-  {
-    DBG_OUTPUT_PORT.print(WiFi.softAPIP());
-  }
-  else
-  {
-    DBG_OUTPUT_PORT.print(WiFi.localIP());
-  }
-  DBG_OUTPUT_PORT.println("/");
-
-  // NTP init
-  if (!apMode)    // if we're in AP Mode we have no internet, so no NTP
-  {
-    DBG_OUTPUT_PORT.println("Starting UDP for NTP");
-    udp.begin(localPort);
-    DBG_OUTPUT_PORT.print("Local port: ");
-    DBG_OUTPUT_PORT.println(udp.localPort());
-
-    delay(1000);
-
-    getNTP();
-
-  }
-
-  //SERVER INIT
+//SERVER INIT
   //list directory
   server.on("/list", HTTP_GET, handleFileList);
   //load editor
@@ -579,9 +664,11 @@ void setup(void){
 
   server.on("/status", HTTP_GET, [](){
     String json = "{";
-    json += String(  "\"servo1\":\"")+String(servo1State?"latched":"unlatched")+String("\"");
-    json += String(", \"servo2\":\"")+String(servo2State?"latched":"unlatched")+String("\"");
-    json += String(", \"time\":")+String(timeNow);
+    for(int i = 0; i < 8; i++)
+    {
+      json += String( "\"zone") + String(i) + String(relayState&(1<<i) ? "\":\"on\"," : "\":\"off\",");
+    }
+    json += String("\"time\":")+String(timeNow);
     json += "}";
     server.send(200, "text/json", json);
     DBG_OUTPUT_PORT.print("status ");
@@ -589,20 +676,17 @@ void setup(void){
     json = String();
   });
 
-  server.on("/toggle1", HTTP_GET, [](){
-    servo1State = ! servo1State;
+  server.on("/toggle", HTTP_GET, [](){
+    int i = 0;
+    if (server.args() > 0)
+      i = atoi(server.arg("zone").c_str());
+    relayState ^= (1<<i);
     server.send(200, "text/text", "OK");
-    DBG_OUTPUT_PORT.printf("toggle servo1 = %d\n",servo1State);
-    setServos();
-  });
-  server.on("/toggle2", HTTP_GET, [](){
-    servo2State = ! servo2State;
-    server.send(200, "text/text", "OK");
-    DBG_OUTPUT_PORT.printf("toggle servo2 = %d\n",servo2State);
-    setServos();
+    DBG_OUTPUT_PORT.printf("toggle %d = %s\n",i,relayState&(1<<i)?"on":"off");
+    setRelays();
   });
   server.on("/restart", HTTP_GET, [](){
-    server.send(200, "text/text", apMode?"Stopping AP, Restarting... to connect to WiFi. Use your browser on your network to reconnect in a minute":"Restarting.... Wait a minute or so and then refresh.");
+    server.send(200, "text/text", "Restarting.... Wait a minute or so and then refresh.");
     delay(2000);
     ESP.restart();
   });
@@ -612,56 +696,13 @@ void setup(void){
 
 }
 
-void loop(void){
 
+void loop(void)
+{
+
+// deal with timer (SimpleTimer)
+  timer.run();
 // deal with http server.
   server.handleClient();
 
-
-// keep track of the time
-  if (!apMode && ms != millis())
-  {
-    ms = millis();
-    if ( (ms % 1000) == 0)
-    {
-      timeNow++;
-      time_t t = timeNow + offsetGMT;
-      int hour = (t % 86400) / 3600;
-      int minute = (t % 3600) / 60;
-      if (lastMinute != minute)  // time to check for things to do?
-      {
-        DBG_OUTPUT_PORT.printf("%d:%02d\n",hour,minute);
-        lastMinute = minute;
-        if (flagRestart)        // if we flagged a reset
-        {
-          flagRestart = false;
-          ESP.restart();
-        }
-        if (servo1State)        // is the servo latched
-        {
-          if (servo1hour == hour && servo1Minute == minute) // time to unlatch?
-          {
-            servo1State = false;
-            setServos();
-          }
-        }
-        if (servo2State)        // is the servo latched
-        {
-          if (servo2hour == hour && servo2Minute == minute) // time to unlatch?
-          {
-            servo2State = false;
-            setServos();
-          }
-        }
-        if (getHour == hour && getMinute == minute)   // time to resync the time?
-        {
-          if (!gettingNtp && !apMode) getNTP();
-        }
-        if (resetHour == hour && resetMinute == minute && resetHour != 0 && resetMinute != 0) // time to reset?
-        {
-          flagRestart = true;
-        }
-      }
-    }
-  }
 }
