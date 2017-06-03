@@ -121,8 +121,7 @@ String getContentType(String filename){
 }
 
 bool handleFileRead(String path){
-  DBG_OUTPUT_PORT.print(timeNow);
-  DBG_OUTPUT_PORT.println(" handleFileRead: " + path);
+  DBG_OUTPUT_PORT.printf(" handleFileRead: %s", path.c_str());
   if(path.endsWith("/")) path += "index.html";
 
   String contentType = getContentType(path);
@@ -144,17 +143,17 @@ void handleFileUpload(){
   if(upload.status == UPLOAD_FILE_START){
     String filename = upload.filename;
     if(!filename.startsWith("/")) filename = "/"+filename;
-    DBG_OUTPUT_PORT.print("handleFileUpload Name: "); DBG_OUTPUT_PORT.println(filename);
+    DBG_OUTPUT_PORT.printf("handleFileUpload Name: %s\n", filename.c_str());
     fsUploadFile = SPIFFS.open(filename, "w");
     filename = String();
   } else if(upload.status == UPLOAD_FILE_WRITE){
-    //DBG_OUTPUT_PORT.print("handleFileUpload Data: "); DBG_OUTPUT_PORT.println(upload.currentSize);
+    //DBG_OUTPUT_PORT.printf("handleFileUpload Data: %s\n",upload.currentSize);
     if(fsUploadFile)
       fsUploadFile.write(upload.buf, upload.currentSize);
   } else if(upload.status == UPLOAD_FILE_END){
     if(fsUploadFile)
       fsUploadFile.close();
-    DBG_OUTPUT_PORT.print("handleFileUpload Size: "); DBG_OUTPUT_PORT.println(upload.totalSize);
+    DBG_OUTPUT_PORT.printf("handleFileUpload Size: %s\n", upload.totalSize);
     if (upload.filename == configFile)
     {
       loadConfig();
@@ -165,7 +164,7 @@ void handleFileUpload(){
 void handleFileDelete(){
   if(server.args() == 0) return server.send(500, "text/plain", "BAD ARGS");
   String path = server.arg(0);
-  DBG_OUTPUT_PORT.println("handleFileDelete: " + path);
+  DBG_OUTPUT_PORT.printf("handleFileDelete: %s\n",path.c_str());
   if(path == "/")
     return server.send(500, "text/plain", "BAD PATH");
   if(!SPIFFS.exists(path))
@@ -179,7 +178,7 @@ void handleFileCreate(){
   if(server.args() == 0)
     return server.send(500, "text/plain", "BAD ARGS");
   String path = server.arg(0);
-  DBG_OUTPUT_PORT.println("handleFileCreate: " + path);
+  DBG_OUTPUT_PORT.printf("handleFileCreate: %s\n",path.c_str());
   if(path == "/")
     return server.send(500, "text/plain", "BAD PATH");
   if(SPIFFS.exists(path))
@@ -197,8 +196,7 @@ void handleFileList() {
   if(!server.hasArg("dir")) {server.send(500, "text/plain", "BAD ARGS"); return;}
 
   String path = server.arg("dir");
-  DBG_OUTPUT_PORT.print(timeNow);
-  DBG_OUTPUT_PORT.println(" handleFileList: " + path);
+  DBG_OUTPUT_PORT.printf(" handleFileList: %s\n",path.c_str());
   Dir dir = SPIFFS.openDir(path);
   path = String();
 
@@ -231,7 +229,7 @@ void loadConfig()
     StaticJsonBuffer<500> jsonBuffer;
     JsonObject& root = jsonBuffer.parseObject(json);
     if (!root.success()) {
-        DBG_OUTPUT_PORT.println("json parse of configFile failed.");
+        DBG_OUTPUT_PORT.printf("json parse of configFile failed.\n");
     }
     else
     {
@@ -315,21 +313,19 @@ void getNTP()
     if (timeServerIP == INADDR_NONE || (tries % 3) == 1)
     {
       //get a random server from the pool
-      DBG_OUTPUT_PORT.print("Looking up:");
-      DBG_OUTPUT_PORT.println(timeServer);
+      DBG_OUTPUT_PORT.printf("Looking up:%s\n",timeServer);
 
       WiFi.hostByName(timeServer, timeServerIP);
-      DBG_OUTPUT_PORT.print("timeServer IP:");
-      DBG_OUTPUT_PORT.println(timeServerIP);
+      DBG_OUTPUT_PORT.printf("timeServer IP:%s\n",timeServerIP.toString().c_str());
 
       if (timeServerIP == INADDR_NONE)
       {
-        DBG_OUTPUT_PORT.println("bad IP, try again");
+        DBG_OUTPUT_PORT.printf("bad IP, try again\n");
         delay(1000);
         continue;
       }
     }
-    DBG_OUTPUT_PORT.println("sending NTP packet...");
+    DBG_OUTPUT_PORT.printf("sending NTP packet...\n");
     // set all bytes in the buffer to 0
     memset(packetBuffer, 0, NTP_PACKET_SIZE);
     // Initialize values needed to form NTP request
@@ -359,11 +355,10 @@ void getNTP()
 
       int cb = udp.parsePacket();
       if (!cb) {
-        DBG_OUTPUT_PORT.print(".");
+        DBG_OUTPUT_PORT.printf(".");
       }
       else {
-        DBG_OUTPUT_PORT.print("packet received, length=");
-        DBG_OUTPUT_PORT.println(cb);
+        DBG_OUTPUT_PORT.printf("packet received, length=%d\n",cb);
         // We've received a packet, read the data from it
         udp.read(packetBuffer, NTP_PACKET_SIZE); // read the packet into the buffer
 
@@ -375,34 +370,22 @@ void getNTP()
         // combine the four bytes (two words) into a long integer
         // this is NTP time (seconds since Jan 1 1900):
         unsigned long secsSince1900 = highWord << 16 | lowWord;
-        DBG_OUTPUT_PORT.print("Seconds since Jan 1 1900 = " );
-        DBG_OUTPUT_PORT.println(secsSince1900);
+        DBG_OUTPUT_PORT.printf("Seconds since Jan 1 1900 = %d\n",secsSince1900);
 
         // now convert NTP time into everyday time:
-        DBG_OUTPUT_PORT.print("Unix time = ");
         // Unix time starts on Jan 1 1970. In seconds, that's 2208988800:
         const unsigned long seventyYears = 2208988800UL;
         // subtract seventy years:
         unsigned long epoch = secsSince1900 - seventyYears;
         // print Unix time:
-        DBG_OUTPUT_PORT.println(epoch);
+        DBG_OUTPUT_PORT.printf("Unix time = %d\n",epoch);
 
 
         // print the hour, minute and second:
-        DBG_OUTPUT_PORT.print("The UTC time is ");       // UTC is the time at Greenwich Meridian (GMT)
-        DBG_OUTPUT_PORT.print((epoch  % 86400L) / 3600); // print the hour (86400 equals secs per day)
-        DBG_OUTPUT_PORT.print(':');
-        if ( ((epoch % 3600) / 60) < 10 ) {
-          // In the first 10 minutes of each hour, we'll want a leading '0'
-          DBG_OUTPUT_PORT.print('0');
-        }
-        DBG_OUTPUT_PORT.print((epoch  % 3600) / 60); // print the minute (3600 equals secs per minute)
-        DBG_OUTPUT_PORT.print(':');
-        if ( (epoch % 60) < 10 ) {
-          // In the first 10 seconds of each minute, we'll want a leading '0'
-          DBG_OUTPUT_PORT.print('0');
-        }
-        DBG_OUTPUT_PORT.println(epoch % 60); // print the second
+        DBG_OUTPUT_PORT.printf("The UTC time is %d:%02d:%02d\n",       // UTC is the time at Greenwich Meridian (GMT)
+          (epoch  % 86400L) / 3600,  // print the hour (86400 equals secs per day)
+          (epoch  % 3600) / 60, // print the minute (3600 equals secs per minute)
+          epoch % 60); // print the second
         timeNow = epoch;
         gettingNtp = false;
       }
@@ -436,10 +419,10 @@ void displayStatus(int line, const char *fmt, ...)
 
 void clearTimedFunc(int *id, const char *name)
 {
-  //DBG_OUTPUT_PORT.printf("clearTimedFunc %s\n",name);
+  DBG_OUTPUT_PORT.printf("clearTimedFunc %s\n",name);
   if (*id > -1)
   {
-    //DBG_OUTPUT_PORT.printf("clearingTimer id=%d\n",*id);
+    DBG_OUTPUT_PORT.printf("clearingTimer id=%d\n",*id);
     timer.disable(*id);
     timer.deleteTimer(*id);
   }
@@ -449,7 +432,7 @@ int setTimedFunc(bool repeat, int *id, long t, void (*func)(), const char *name)
 {
   if (*id > -1)
   {
-    //DBG_OUTPUT_PORT.printf("clearingTimer id=%d\n",*id);
+    DBG_OUTPUT_PORT.printf("clearingTimer id=%d\n",*id);
     timer.disable(*id);
     timer.deleteTimer(*id);
   }
@@ -465,7 +448,14 @@ int setTimedFunc(bool repeat, int *id, long t, void (*func)(), const char *name)
       *id = timer.setTimeout(t,func);
     }
   }
-  //DBG_OUTPUT_PORT.printf("setTimedFunc %d %d %s %08x id=%d\n",repeat,t,name,func,*id);
+  DBG_OUTPUT_PORT.printf("setTimedFunc %d %d %s %08x id=%d\n",repeat,t,name,func,*id);
+  for (int i = 0; i < timer.MAX_TIMERS; i++) {
+    if (timer.callbacks[i])
+    {
+      DBG_OUTPUT_PORT.printf("%d cb:%08x num:%d numMax:%d\n",
+        i, timer.callbacks[i], timer.numRuns[i], timer.maxNumRuns[i]);
+    }
+  }
   return(*id);
 }
 
@@ -500,10 +490,9 @@ void startNTP()
     // NTP init
     if (!apMode)    // if we're in AP Mode we have no internet, so no NTP
     {
-      DBG_OUTPUT_PORT.println("Starting UDP for NTP");
+      DBG_OUTPUT_PORT.printf("Starting UDP for NTP\n");
       udp.begin(localPort);
-      DBG_OUTPUT_PORT.print("Local port: ");
-      DBG_OUTPUT_PORT.println(udp.localPort());
+      DBG_OUTPUT_PORT.printf("Local port: %s\n",udp.localPort());
 
       delay(1000);
 
@@ -545,7 +534,7 @@ void setApMode(bool mode)
     apMode = mode;
     if (apMode)
     {
-      DBG_OUTPUT_PORT.println("going to AP mode ");
+      DBG_OUTPUT_PORT.printf("going to AP mode\n");
       WiFi.disconnect();
       delay(500);
       WiFi.mode(WIFI_AP);
@@ -573,6 +562,7 @@ void setApMode(bool mode)
 
 WiFiEventHandler onSTAGotIPHandler;
 void onSTAGotIP(WiFiEventStationModeGotIP ipInfo) {
+  if (apMode) return;
   DBG_OUTPUT_PORT.printf("Got IP: %s\n", ipInfo.ip.toString().c_str());
   displayStatus(0, "STA:%s %s %d",WiFi.localIP().toString().c_str(),ssid,WiFi.RSSI());
   setApModeTimeout(0);
@@ -583,6 +573,7 @@ void onSTAGotIP(WiFiEventStationModeGotIP ipInfo) {
 
 WiFiEventHandler onSTADisconnectedHandler;
 void onSTADisconnected(WiFiEventStationModeDisconnected event_info) {
+  if (apMode) return;
   Serial.printf("Disconnected from SSID: %s Reason: %d\n", event_info.ssid.c_str(),event_info.reason);
   displayStatus(0, "DIS:%s %d",event_info.ssid.c_str(),event_info.reason);
   setBlinker(50);
@@ -604,7 +595,7 @@ void setup(void){
 
   DBG_OUTPUT_PORT.begin(74880);
   DBG_OUTPUT_PORT.setDebugOutput(true);
-  DBG_OUTPUT_PORT.print("\n");
+  DBG_OUTPUT_PORT.printf("\n");
 
 
   u8g2.begin();
@@ -673,8 +664,7 @@ void setup(void){
     json += String("\"time\":")+String(timeNow);
     json += "}";
     server.send(200, "text/json", json);
-    DBG_OUTPUT_PORT.print("status ");
-    DBG_OUTPUT_PORT.println(json);
+    DBG_OUTPUT_PORT.printf("status %s\n",json.c_str());
     json = String();
   });
 

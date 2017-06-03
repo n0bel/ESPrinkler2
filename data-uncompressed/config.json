@@ -1,10 +1,11 @@
 {
-  "servo1Time":"06:00",
-  "servo2Time":"18:00",
-  "offsetGMT":-18000,
-  "host":"ESPrinkler2",
-  "ssid":"YOURSSID",
-  "password":"YOURPASSWORD",
-  "timeServer":"0.pool.ntp.org",
-  "resetTime":"00:00","getTime":"02:01"
+  "servo1Time": "06:00",
+  "servo2Time": "18:00",
+  "offsetGMT": -18000,
+  "host": "ESPrinkler2",
+  "ssid": "YOURSSID",
+  "password": "YOURPASSWORD",
+  "timeServer": "0.pool.ntp.org",
+  "resetTime": "00:00",
+  "getTime": "02:01"
 }
