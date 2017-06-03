@@ -315,7 +315,7 @@ void getNTP()
     if (timeServerIP == INADDR_NONE || (tries % 3) == 1)
     {
       //get a random server from the pool
-      DBG_OUTPUT_PORT.print("\nLooking up:");
+      DBG_OUTPUT_PORT.print("Looking up:");
       DBG_OUTPUT_PORT.println(timeServer);
 
       WiFi.hostByName(timeServer, timeServerIP);
@@ -434,19 +434,22 @@ void displayStatus(int line, const char *fmt, ...)
 
 }
 
-int clearTimedFunc(int *id)
+void clearTimedFunc(int *id, const char *name)
 {
-  if (*id > 0)
+  //DBG_OUTPUT_PORT.printf("clearTimedFunc %s\n",name);
+  if (*id > -1)
   {
+    //DBG_OUTPUT_PORT.printf("clearingTimer id=%d\n",*id);
     timer.disable(*id);
     timer.deleteTimer(*id);
   }
   *id = -1;
 }
-int setTimedFunc(bool repeat, int *id, long t, void (*func)())
+int setTimedFunc(bool repeat, int *id, long t, void (*func)(), const char *name)
 {
-  if (*id > 0)
+  if (*id > -1)
   {
+    //DBG_OUTPUT_PORT.printf("clearingTimer id=%d\n",*id);
     timer.disable(*id);
     timer.deleteTimer(*id);
   }
@@ -462,11 +465,13 @@ int setTimedFunc(bool repeat, int *id, long t, void (*func)())
       *id = timer.setTimeout(t,func);
     }
   }
+  //DBG_OUTPUT_PORT.printf("setTimedFunc %d %d %s %08x id=%d\n",repeat,t,name,func,*id);
+  return(*id);
 }
 
 // LED CONTROL
 int blinkerTimerId = -1;
-#define setBlinker(t) setTimedFunc(true,&blinkerTimerId,t,blinker)
+#define setBlinker(t) setTimedFunc(true,&blinkerTimerId,t,blinker,"blinker")
 void blinker()
 {
   static bool onoff = false;
@@ -482,7 +487,7 @@ void startMDNS()
   if (mdnsStarted) return;
   mdnsStarted = true;
   MDNS.begin(host);
-  DBG_OUTPUT_PORT.printf("MDNS Starting\r\nOpen http://%s.local or http://%s/\r\n",
+  DBG_OUTPUT_PORT.printf("MDNS Starting\nOpen http://%s.local or http://%s/\n",
     host, apMode? WiFi.softAPIP().toString().c_str() : WiFi.localIP().toString().c_str());
 }
 
@@ -514,11 +519,11 @@ void stopNTP()
 // WIFI STATUS CHANGES
 int apModeTimerId = -1;
 int staModeTimerId = -1;
-#define setApModeTimeout(t) setTimedFunc(false,&apModeTimerId,t,apModeTimeout)
-#define setStaModeTimeout(t) setTimedFunc(false,&staModeTimerId,t,staModeTimeout)
+#define setApModeTimeout(t) setTimedFunc(false,&apModeTimerId,t,apModeTimeout,"apModeTimeout")
+#define setStaModeTimeout(t) setTimedFunc(false,&staModeTimerId,t,staModeTimeout,"staModeTimeout")
 void apModeTimeout()
 {
-  DBG_OUTPUT_PORT.printf("apModeTimeout\r\n");
+  DBG_OUTPUT_PORT.printf("apModeTimeout\n");
   apModeTimerId = -1;
   setApMode(true);
   setBlinker(100);
@@ -527,13 +532,12 @@ void apModeTimeout()
 
 void staModeTimeout()
 {
-  DBG_OUTPUT_PORT.printf("staModeTimeout\r\n");
+  DBG_OUTPUT_PORT.printf("staModeTimeout\n");
   staModeTimerId = -1;
   setApMode(false);
   setBlinker(50);
   setApModeTimeout(60000);
 }
-
 
 void setApMode(bool mode)
 {
@@ -541,7 +545,7 @@ void setApMode(bool mode)
     apMode = mode;
     if (apMode)
     {
-      DBG_OUTPUT_PORT.println("\ngoing to AP mode ");
+      DBG_OUTPUT_PORT.println("going to AP mode ");
       WiFi.disconnect();
       delay(500);
       WiFi.mode(WIFI_AP);
@@ -550,13 +554,11 @@ void setApMode(bool mode)
       delay(500);
       WiFi.softAPmacAddress(mac);
       delay(500);
-      sprintf(ssid,"%s_%02x%02x%02x",host,mac[3],mac[4],mac[5]);   // making a nice unique SSID
-      DBG_OUTPUT_PORT.print("SoftAP ssid:");
-      DBG_OUTPUT_PORT.println(ssid);
-      WiFi.softAP(ssid);
-      DBG_OUTPUT_PORT.println("");
-      DBG_OUTPUT_PORT.print("AP mode. IP address: ");
-      DBG_OUTPUT_PORT.println(WiFi.softAPIP());
+      char assid[31];
+      sprintf(assid,"%s_%02x%02x%02x",host,mac[3],mac[4],mac[5]);   // making a nice unique SSID
+      DBG_OUTPUT_PORT.printf("SoftAP ssid:%s\n",assid);
+      WiFi.softAP(assid);
+      DBG_OUTPUT_PORT.printf("AP mode. IP address: %s\n",WiFi.softAPIP().toString().c_str());
       displayStatus(0, "AP:%s",WiFi.softAPIP().toString().c_str());
     }
     else
@@ -571,7 +573,7 @@ void setApMode(bool mode)
 
 WiFiEventHandler onSTAGotIPHandler;
 void onSTAGotIP(WiFiEventStationModeGotIP ipInfo) {
-  DBG_OUTPUT_PORT.printf("Got IP: %s\r\n", ipInfo.ip.toString().c_str());
+  DBG_OUTPUT_PORT.printf("Got IP: %s\n", ipInfo.ip.toString().c_str());
   displayStatus(0, "STA:%s %s %d",WiFi.localIP().toString().c_str(),ssid,WiFi.RSSI());
   setApModeTimeout(0);
   setBlinker(500);
@@ -601,8 +603,8 @@ void setup(void){
   SPI.transfer(relayState);
 
   DBG_OUTPUT_PORT.begin(74880);
-  DBG_OUTPUT_PORT.print("\n");
   DBG_OUTPUT_PORT.setDebugOutput(true);
+  DBG_OUTPUT_PORT.print("\n");
 
 
   u8g2.begin();
@@ -692,7 +694,7 @@ void setup(void){
   });
 
   server.begin();
-  DBG_OUTPUT_PORT.println("HTTP server started");
+  DBG_OUTPUT_PORT.printf("HTTP server started\n");
 
 }
 
