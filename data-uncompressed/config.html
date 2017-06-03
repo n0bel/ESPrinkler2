@@ -69,7 +69,7 @@
         });
 
         editor.on('ready',function() {
-          $( "input[name='root[offsetGMT]']" ).after("<button id='settz'; class='tiny'>Set Timezone from Browser</button>");
+          $( "input[name='root[offsetGMT]']" ).after("<button id='settz'; class='button tiny'>Set Timezone from Browser</button>");
           $( '#settz' ).click(function(){
             var offset = new Date().getTimezoneOffset() * -60;
             var d = editor.getValue();

@@ -34,6 +34,7 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
+#include <TimeLib.h>
 #include <NtpClientLib.h>
 #include <FS.h>
 #include <stdarg.h>
@@ -48,6 +49,7 @@ U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 
 
 #define DBG_OUTPUT_PORT Serial
+// #define EXTRA_DEBUG
 
 const char* configFile = "/config.json";   // The config file name
 
@@ -77,16 +79,7 @@ File fsUploadFile;            //holds the current upload when files are uploaded
 WiFiUDP udp;
 SimpleTimer timer;
 
-IPAddress timeServerIP;
-unsigned int localPort = 2390; // local port to listen for UDP packets
-const int NTP_PACKET_SIZE = 48; // NTP time stamp is in the first 48 bytes of the message
-byte packetBuffer[ NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
-// A UDP instance to let us send and receive packets over UDP
-
-time_t timeNow = 0;       // current time is stored here
 time_t ms = 0;            // tracking milliseconds
-int lastMinute = -1;      // tracking if minute changed
-int gettingNtp = false;
 int flagRestart = false;
 
 //format bytes
@@ -121,7 +114,7 @@ String getContentType(String filename){
 }
 
 bool handleFileRead(String path){
-  DBG_OUTPUT_PORT.printf(" handleFileRead: %s", path.c_str());
+  DBG_OUTPUT_PORT.printf(" handleFileRead: %s\n", path.c_str());
   if(path.endsWith("/")) path += "index.html";
 
   String contentType = getContentType(path);
@@ -153,7 +146,7 @@ void handleFileUpload(){
   } else if(upload.status == UPLOAD_FILE_END){
     if(fsUploadFile)
       fsUploadFile.close();
-    DBG_OUTPUT_PORT.printf("handleFileUpload Size: %s\n", upload.totalSize);
+    DBG_OUTPUT_PORT.printf("handleFileUpload Size: %d\n", upload.totalSize);
     if (upload.filename == configFile)
     {
       loadConfig();
@@ -289,112 +282,6 @@ void setRelays()
 
 }
 
-void getNTP()
-{
-
-  if (gettingNtp) return;
-  time_t failms = millis();
-  time_t ims = millis();
-  int tries = 0;
-  gettingNtp = true;
-  while(gettingNtp)
-  {
-    tries++;
-    if (timeNow > 100) // we have successfully got the time before
-      if ((millis() - failms) > 60*1000 ) // 1 minutes
-        {
-          gettingNtp = false;
-          return;  // lets just foreget it
-        }
-    if ((millis() - failms) > 5*60*1000) // 5 minutes
-    {
-      ESP.restart();
-    }
-    if (timeServerIP == INADDR_NONE || (tries % 3) == 1)
-    {
-      //get a random server from the pool
-      DBG_OUTPUT_PORT.printf("Looking up:%s\n",timeServer);
-
-      WiFi.hostByName(timeServer, timeServerIP);
-      DBG_OUTPUT_PORT.printf("timeServer IP:%s\n",timeServerIP.toString().c_str());
-
-      if (timeServerIP == INADDR_NONE)
-      {
-        DBG_OUTPUT_PORT.printf("bad IP, try again\n");
-        delay(1000);
-        continue;
-      }
-    }
-    DBG_OUTPUT_PORT.printf("sending NTP packet...\n");
-    // set all bytes in the buffer to 0
-    memset(packetBuffer, 0, NTP_PACKET_SIZE);
-    // Initialize values needed to form NTP request
-    // (see URL above for details on the packets)
-    packetBuffer[0] = 0b11100011;   // LI, Version, Mode
-    packetBuffer[1] = 0;     // Stratum, or type of clock
-    packetBuffer[2] = 6;     // Polling Interval
-    packetBuffer[3] = 0xEC;  // Peer Clock Precision
-    // 8 bytes of zero for Root Delay & Root Dispersion
-    packetBuffer[12]  = 49;
-    packetBuffer[13]  = 0x4E;
-    packetBuffer[14]  = 49;
-    packetBuffer[15]  = 52;
-
-    // all NTP fields have been given values, now
-    // you can send a packet requesting a timestamp:
-    udp.beginPacket(timeServerIP, 123); //NTP requests are to port 123
-    udp.write(packetBuffer, NTP_PACKET_SIZE);
-    udp.endPacket();
-
-    ims = millis();
-    while(gettingNtp)
-    {
-      if ((millis() - ims) > 5000) break; // if > 15 seconds waiting for packet, send packet again (break into outer loop)
-      // wait to see if a reply is available
-      delay(1000);
-
-      int cb = udp.parsePacket();
-      if (!cb) {
-        DBG_OUTPUT_PORT.printf(".");
-      }
-      else {
-        DBG_OUTPUT_PORT.printf("packet received, length=%d\n",cb);
-        // We've received a packet, read the data from it
-        udp.read(packetBuffer, NTP_PACKET_SIZE); // read the packet into the buffer
-
-        //the timestamp starts at byte 40 of the received packet and is four bytes,
-        // or two words, long. First, esxtract the two words:
-
-        unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
-        unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
-        // combine the four bytes (two words) into a long integer
-        // this is NTP time (seconds since Jan 1 1900):
-        unsigned long secsSince1900 = highWord << 16 | lowWord;
-        DBG_OUTPUT_PORT.printf("Seconds since Jan 1 1900 = %d\n",secsSince1900);
-
-        // now convert NTP time into everyday time:
-        // Unix time starts on Jan 1 1970. In seconds, that's 2208988800:
-        const unsigned long seventyYears = 2208988800UL;
-        // subtract seventy years:
-        unsigned long epoch = secsSince1900 - seventyYears;
-        // print Unix time:
-        DBG_OUTPUT_PORT.printf("Unix time = %d\n",epoch);
-
-
-        // print the hour, minute and second:
-        DBG_OUTPUT_PORT.printf("The UTC time is %d:%02d:%02d\n",       // UTC is the time at Greenwich Meridian (GMT)
-          (epoch  % 86400L) / 3600,  // print the hour (86400 equals secs per day)
-          (epoch  % 3600) / 60, // print the minute (3600 equals secs per minute)
-          epoch % 60); // print the second
-        timeNow = epoch;
-        gettingNtp = false;
-      }
-    }
-  }
-
-
-}
-
 void displayStatus(int line, const char *fmt, ...)
 {
 
@@ -432,7 +319,9 @@ int setTimedFunc(bool repeat, int *id, long t, void (*func)(), const char *name)
 {
   if (*id > -1)
   {
+    #ifdef EXTRA_DEBUG
     DBG_OUTPUT_PORT.printf("clearingTimer id=%d\n",*id);
+    #endif
     timer.disable(*id);
     timer.deleteTimer(*id);
   }
@@ -448,6 +337,7 @@ int setTimedFunc(bool repeat, int *id, long t, void (*func)(), const char *name)
       *id = timer.setTimeout(t,func);
     }
   }
+  #ifdef EXTRA_DEBUG
   DBG_OUTPUT_PORT.printf("setTimedFunc %d %d %s %08x id=%d\n",repeat,t,name,func,*id);
   for (int i = 0; i < timer.MAX_TIMERS; i++) {
     if (timer.callbacks[i])
@@ -456,6 +346,7 @@ int setTimedFunc(bool repeat, int *id, long t, void (*func)(), const char *name)
         i, timer.callbacks[i], timer.numRuns[i], timer.maxNumRuns[i]);
     }
   }
+  #endif
   return(*id);
 }
 
@@ -481,30 +372,42 @@ void startMDNS()
     host, apMode? WiFi.softAPIP().toString().c_str() : WiFi.localIP().toString().c_str());
 }
 
-// NTP Enable/Disabled
+// NTP
 bool ntpStarted = false;
 void startNTP()
 {
     if (ntpStarted) return;
     ntpStarted = true;
-    // NTP init
-    if (!apMode)    // if we're in AP Mode we have no internet, so no NTP
-    {
-      DBG_OUTPUT_PORT.printf("Starting UDP for NTP\n");
-      udp.begin(localPort);
-      DBG_OUTPUT_PORT.printf("Local port: %s\n",udp.localPort());
-
-      delay(1000);
-
-      getNTP();
-
-    }
+    DBG_OUTPUT_PORT.printf("Starting NTP\n");
+    NTP.begin(timeServer,0,false);
 }
 void stopNTP()
 {
-
+    NTP.stop();
+    ntpStarted = false;
+}
+void handleNtpSync(NTPSyncEvent_t event)
+{
+  if (event)
+  {
+    DBG_OUTPUT_PORT.printf("NTP Error %d\n",event);
+  }
+  else
+  {
+    DBG_OUTPUT_PORT.printf("NTP Successfull\n");
+  }
 }
 
+int displayTimeId = -1;
+
+void displayTime()
+{
+  #ifdef EXTRA_DEBUG
+    DBG_OUTPUT_PORT.printf("now(): %d\n",now());
+  #endif
+  displayStatus(1,"time %s\n",NTP.getTimeDateString(now()>100000000?now()+offsetGMT:0).c_str());
+
+}
 // WIFI STATUS CHANGES
 int apModeTimerId = -1;
 int staModeTimerId = -1;
@@ -568,7 +471,7 @@ void onSTAGotIP(WiFiEventStationModeGotIP ipInfo) {
   setApModeTimeout(0);
   setBlinker(500);
   timer.setTimeout(1000,startMDNS);
-  timer.setTimeout(2000,startNTP);
+  timer.setTimeout(5000,startNTP);
 }
 
 WiFiEventHandler onSTADisconnectedHandler;
@@ -594,9 +497,10 @@ void setup(void){
   SPI.transfer(relayState);
 
   DBG_OUTPUT_PORT.begin(74880);
+  DBG_OUTPUT_PORT.setDebugOutput(false);
+  #ifdef EXTRA_DEBUG
   DBG_OUTPUT_PORT.setDebugOutput(true);
-  DBG_OUTPUT_PORT.printf("\n");
-
+  #endif
 
   u8g2.begin();
   u8g2.setFont(u8g2_font_helvR08_tf);
@@ -627,11 +531,13 @@ void setup(void){
 
   onSTAGotIPHandler = WiFi.onStationModeGotIP(onSTAGotIP);
   onSTADisconnectedHandler = WiFi.onStationModeDisconnected(onSTADisconnected);
+  NTP.onNTPSyncEvent(handleNtpSync);
   WiFi.persistent(false);
   apMode=true; // forced mode change
   setApMode(false);
   setApModeTimeout(60000);
 
+  setTimedFunc(true, &displayTimeId, 1000, displayTime, "displayTime");
 
 //SERVER INIT
   //list directory
@@ -661,7 +567,7 @@ void setup(void){
     {
       json += String( "\"zone") + String(i) + String(relayState&(1<<i) ? "\":\"on\"," : "\":\"off\",");
     }
-    json += String("\"time\":")+String(timeNow);
+    json += String("\"time\":")+String(now());
     json += "}";
     server.send(200, "text/json", json);
     DBG_OUTPUT_PORT.printf("status %s\n",json.c_str());
