@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>ESPrinkler2 Config</title>
+    <title>ESPrinkler2 Sched</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <!-- Foundation CSS framework (Bootstrap and jQueryUI also supported) -->
     <link rel='stylesheet' href='/foundation.min.css'>
@@ -12,6 +12,8 @@
     .radius { border-radius: 3px; }
     .button { border-radius: 5px; }
     .callout { background-color: #ddd; }
+    .error { color: red ;}
+    div .error { background-color: #fdd ;}
     </style>
     <script>
       /* global JSONEditor, $, FormData, Blob, alert */  /* for eslint */
@@ -20,17 +22,48 @@
 
       var editor;
 
-      function getConfig () {
-        // console.log('get config');
-        $.getJSON('config.json', function (data) {
+      JSONEditor.defaults.custom_validators.push(function (schema, value, path) {
+        var errors = [];
+        if (schema.format === 'date') {
+          if (value !== '' && !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)) {
+            // Errors must be an object with `path`, `property`, and `message`
+            errors.push({
+              path: path,
+              property: 'format',
+              message: 'Dates must be in the format "YYYY-MM-DD"'
+            });
+          }
+        }
+        if (schema.format === 'time') {
+          if (!/^[0-9]{1,2}:[0-9]{2}$/.test(value)) {
+            // Errors must be an object with `path`, `property`, and `message`
+            errors.push({
+              path: path,
+              property: 'format',
+              message: 'Times must be in the format HH:MM'
+            });
+          }
+        }
+        return errors;
+      });
+
+      function getSched () {
+        // console.log('get sched');
+        $.getJSON('sched.json', function (data) {
           editor.setValue(data);
           // console.log(JSON.stringify(data));
         });
       }
-      function saveConfig (data) {
+      function saveSched (data) {
+        let errors = editor.validate();
+        console.log(errors);
+        if (errors.length) {
+          alert('There are errors on the form.  Please correct the data highlighted in red');
+          return;
+        }
         $('#save, #save2').prop('disabled', true);
         var formData = new FormData();
-        formData.append('data', new Blob([data], { type: 'text/json' }), '/config.json');
+        formData.append('data', new Blob([data], { type: 'text/json' }), '/sched.json');
         $.ajax({
           url: '/edit',
           data: formData,
@@ -49,23 +82,17 @@
           required_by_default: true,
           remove_empty_properties: false,
           schema: {
-            $ref: 'config-schema.json'
+            $ref: 'sched-schema.json'
           }
         });
 
         $('#save, #save2').click(function () {
           // console.log(JSON.stringify(editor.getValue()));
-          saveConfig(JSON.stringify(editor.getValue()));
+          saveSched(JSON.stringify(editor.getValue()));
         });
 
         $('#load, #load2').click(function () {
-          getConfig();
-        });
-
-        $('#restart, #restart2').click(function () {
-          $.get('restart', function (data) {
-            alert(data);
-          });
+          getSched();
         });
 
         editor.on('ready', function () {
@@ -76,13 +103,14 @@
             d.offsetGMT = offset;
             editor.setValue(d);
           });
-          getConfig();
+          getSched();
         });
       });
 
    </script>
  </head>
   <body>
+
     <div class="row">
       <div class="large-12 columns">
         <div class="panel">
@@ -100,13 +128,11 @@
     </div>
     <div class='row'>
       <div class="small-12 columns">
-          <button id='save' class='button tiny'>Save Config</button>
-          <button id='load' class='button tiny'>Load Config</button>
-          <button id='restart' class='button tiny'>Restart</button>
+          <button id='save' class='button tiny'>Save Sched</button>
+          <button id='load' class='button tiny'>Load Sched</button>
           <div id='editor_holder' class="panel callout radius"></div>
-          <button id='save2' class='button tiny'>Save Config</button>
-          <button id='load2' class='button tiny'>Load Config</button>
-          <button id='restart2' class='button tiny'>Restart</button>
+          <button id='save2' class='button tiny'>Save Sched</button>
+          <button id='load2' class='button tiny'>Load Sched</button>
       </div>
     </div>
 

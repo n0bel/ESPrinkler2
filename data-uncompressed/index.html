@@ -12,56 +12,53 @@
     .button { border-radius: 5px; }
     .callout { background-color: #ddd; }
     </style>
-	<script>
+  <script>
+    /* global $, alert */  /* for eslint */
     var statusTime;
     var intervalHandle = null;
-		function getStatus() {
+    function getStatus () {
       if (intervalHandle) window.clearInterval(intervalHandle);
       $.getJSON('status', function (data) {
-        for (i = 0; i < 8; i++)
-        {
-          let b = $( '#zs' + i );
-          if (data['zone'+i] == 'on')
-          {
-            b.removeClass('success')
-            b.addClass('alert')
-          }
-          else
-          {
-            b.removeClass('alert')
-            b.addClass('success')
+        for (var i = 0; i < 8; i++) {
+          let b = $('#zs' + i);
+          if (data['zone' + i] === 'on') {
+            b.removeClass('success');
+            b.addClass('alert');
+          } else {
+            b.removeClass('alert');
+            b.addClass('success');
           }
         }
         statusTime = data.time;
-        $( '#stime' ).text(new Date(statusTime*1000).toString());
-        intervalHandle = window.setInterval(function(){
+        $('#stime').text(new Date(statusTime * 1000).toString());
+        intervalHandle = window.setInterval(function () {
           statusTime++;
-          $( '#stime' ).text(new Date(statusTime*1000).toString());
-        },1000);
+          $('#stime').text(new Date(statusTime * 1000).toString());
+        }, 1000);
       });
-		}
-		function toggle(which) {
-      $.get('/toggle',{ zone: which }, function () {
+    }
+    function toggle (which) {
+      $.get('/toggle', { zone: which }, function () {
         getStatus();
       });
-		}
+    }
     $(function () {
       $.ajaxSetup({ cache: false });
 
-      $('button').filter(function(){
+      $('button').filter(function () {
         return this.id.match(/^zs([\d])/);
-      }).click(function() {
+      }).click(function () {
         let mm = this.id.match(/^zs([\d])/);
         toggle(mm[1]);
       });
-      $( '#restart').click(function(){
-        $.get('restart', function(data) {
+      $('#restart').click(function () {
+        $.get('restart', function (data) {
           alert(data);
         });
-      })
-      $( '#refresh').click(function(){
+      });
+      $('#refresh').click(function () {
         getStatus();
-      })
+      });
 
       getStatus();
     });
@@ -76,6 +73,9 @@
       </div>
     </div>
     <div class="row" >
+      <div class="small-3 columns">
+        <a href="sched.html" class='button'>Go to Schedule</a>
+      </div>
       <div class="small-3 columns">
         <a href="config.html" class='button'>Go to Config</a>
       </div>

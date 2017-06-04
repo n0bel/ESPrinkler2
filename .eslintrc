@@ -1,5 +1,8 @@
 {
   "extends": "eslint-config-standard",
+  "plugins": [
+      "html"
+  ],
   "rules": {
     "semi": [ "error", "always" ]
   },

@@ -1,0 +1,85 @@
+{
+	"title": "Schedules",
+	"type": "array",
+	"format": "tabs",
+	"items": {
+		"title": "Schedule",
+		"headerTemplate": "Schedule {{i1}} - {{self.startTime}} - {{self.zone}} - {{self.duration}} min",
+		"type": "object",
+		"id": "schedule",
+		"properties": {
+			"zone": {
+				"title": "Zone",
+				"type": "string",
+				"enum": [
+					"Zone 1",
+					"Zone 2",
+					"Zone 3",
+					"Zone 4",
+					"Zone 5",
+					"Zone 6",
+					"Zone 7",
+					"Zone 8",
+					"Restart"
+				],
+				"propertyOrder": 10
+			},
+			"startTime": {
+				"title": "Start Time",
+				"description": "Start time for this schedule  HH:MM",
+				"type": "string",
+				"format": "time",
+				"maxLength": 5,
+				"propertyOrder": 20
+			},
+			"duration": {
+				"title": "Duration",
+				"description": "Duration schedule (Minutes)",
+				"type": "integer",
+				"default": 15,
+				"minimum": 1,
+				"maximum": 120,
+				"maxLength": 5,
+				"propertyOrder": 30
+			},
+			"days": {
+				"title": "Days",
+				"type": "array",
+				"format": "checkbox",
+				"uniqueItems": true,
+				"items": {
+					"type": "string",
+					"enum": [
+						"Sunday",
+						"Monday",
+						"Tuesday",
+						"Wednesday",
+						"Thursday",
+						"Friday",
+						"Staturday",
+						"Even Days",
+						"Odd Days"
+					]
+				},
+				"propertyOrder": 40
+			},
+			"begin": {
+				"title": "Begin Date",
+				"description": "First date to run this schedule (YYYY-MM-DD) Blank means start immediately.",
+				"type": "string",
+				"format": "date",
+				"maxLength": 10,
+				"propertyOrder": 50
+			}
+			,
+			"end": {
+				"title": "End Date",
+				"description": "Last date to run this schedule (YYYY-MM-DD)  Blank means forever.",
+				"type": "string",
+				"format": "date",
+				"maxLength": 10,
+				"propertyOrder": 60
+			}
+		}
+	}
+}
