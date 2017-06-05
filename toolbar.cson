@@ -1,0 +1,60 @@
+# For Atom Editor Flex-toolbar package
+[
+  {
+    type: "button"
+    icon: "terminal"
+    callback: "run-in-terminal:editor-start-terminal-here"
+    tooltip: "Open Terminal Here"
+    iconset: "fa"
+  }
+  {
+    type: "button"
+    icon: "object-group"
+    callback: "tree-view:show-current-file-in-file-manager"
+    tooltip: "Open Explorer Here"
+    iconset: "fa"
+  }
+  {
+    type: "spacer"
+  }
+  {
+    type: "button"
+    icon: "check-square"
+    callback: "build:compile"
+    tooltip: "Compile"
+    iconset: "fa"
+    show: "Arduino"
+  }
+  {
+    type: "button"
+    icon: "arrow-circle-up"
+    callback: "build:upload_then_terminal"
+    tooltip: "Build/Upload/Terminal"
+    iconset: "fa"
+    show: "Arduino"
+  }
+  {
+    type: "button"
+    icon: "files-o"
+    callback: "build:spiffs"
+    tooltip: "Upload spiffs"
+    iconset: "fa"
+    show: "Arduino"
+  }
+  {
+    type: "button"
+    icon: "question-circle"
+    callback: "build:select-active-target"
+    tooltip: "Build Choose Target"
+    iconset: "fa"
+    show: "Arduino"
+  }
+  {
+    type: "button"
+    icon: "play-circle"
+    callback: "run-in-terminal:editor-start-terminal-here-and-run"
+    tooltip: "Run"
+    iconset: "fa"
+    show: "Python"
+  }
+]

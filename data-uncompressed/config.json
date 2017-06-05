@@ -1,8 +1,0 @@
-{
-  "host": "ESPrinkler2",
-  "ssid": "YOURSSID",
-  "password": "YOURPASSWORD",
-  "offsetGMT": -18000,
-  "timeServer": "0.pool.ntp.org",
-  "resetTime": "00:00"
-}

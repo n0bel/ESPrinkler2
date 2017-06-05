@@ -24,28 +24,42 @@
 
       JSONEditor.defaults.custom_validators.push(function (schema, value, path) {
         var errors = [];
+        if (schema.required && value === '') {
+          errors.push({
+            path: path,
+            property: 'required',
+            message: schema.title + ' is required'
+          });
+        }
         if (schema.format === 'date') {
           if (value !== '' && !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)) {
             // Errors must be an object with `path`, `property`, and `message`
             errors.push({
               path: path,
               property: 'format',
-              message: 'Dates must be in the format "YYYY-MM-DD"'
+              message: schema.title + ': Dates must be in the format "YYYY-MM-DD"'
             });
           }
         }
         if (schema.format === 'time') {
-          if (!/^[0-9]{1,2}:[0-9]{2}$/.test(value)) {
+          if (value !== '' && !/^[0-9]{1,2}:[0-9]{2}$/.test(value)) {
             // Errors must be an object with `path`, `property`, and `message`
             errors.push({
               path: path,
               property: 'format',
-              message: 'Times must be in the format HH:MM'
+              message: schema.title + ': Times must be in the format HH:MM'
             });
           }
         }
         return errors;
       });
+
+      function getConfig () {
+        $.getJSON('config.json', function (data) {
+          $('.hostname').text(data.host);
+          document.title = data.host + ' Configuration';
+        });
+      }
 
       function getSched () {
         // console.log('get sched');
@@ -55,12 +69,6 @@
         });
       }
       function saveSched (data) {
-        let errors = editor.validate();
-        console.log(errors);
-        if (errors.length) {
-          alert('There are errors on the form.  Please correct the data highlighted in red');
-          return;
-        }
         $('#save, #save2').prop('disabled', true);
         var formData = new FormData();
         formData.append('data', new Blob([data], { type: 'text/json' }), '/sched.json');
@@ -87,8 +95,18 @@
         });
 
         $('#save, #save2').click(function () {
+          let errors = editor.validate();
+          // console.log(errors);
+          if (errors.length) {
+            var ss = '';
+            for (let i = 0; i < errors.length; i++) {
+              ss += errors[i].path + ':' + errors[i].message + '\r\n';
+            }
+            alert(ss);
+            return;
+          }
           // console.log(JSON.stringify(editor.getValue()));
-          saveSched(JSON.stringify(editor.getValue()));
+          saveSched(JSON.stringify(editor.getValue(), null, 1));
         });
 
         $('#load, #load2').click(function () {
@@ -96,13 +114,14 @@
         });
 
         editor.on('ready', function () {
-          $("input[name='root[offsetGMT]']").after("<button id='settz'; class='button tiny'>Set Timezone from Browser</button>");
+          $("input[name='root[offsetGMT]']").after("<button id='settz'; class='button tiny'>Set Time zone from Browser</button>");
           $('#settz').click(function () {
             var offset = new Date().getTimezoneOffset() * -60;
             var d = editor.getValue();
             d.offsetGMT = offset;
             editor.setValue(d);
           });
+          getConfig();
           getSched();
         });
       });
@@ -114,25 +133,25 @@
     <div class="row">
       <div class="large-12 columns">
         <div class="panel">
-          <h2>ESPrinkler2</h2>
+          <h2><span class="hostname">ESPrinkler2</span> Schedules</h2>
         </div>
       </div>
     </div>
     <div class="row">
       <div class="small-2 columns">
-        <a href="/" class='button'>Go to Main Page</a>
+        <a href="/" class='button'>Main Page</a>
       </div>
       <div class="small-2 columns">
-        <a href="/edit.html" class='button'>Go to FS Editor</a>
+        <a href="/edit.html" class='button'>FS Editor</a>
       </div>
     </div>
     <div class='row'>
       <div class="small-12 columns">
-          <button id='save' class='button tiny'>Save Sched</button>
-          <button id='load' class='button tiny'>Load Sched</button>
+          <button id='save' class='button '>Save Schedules</button>
+          <button id='load' class='button '>Load Schedules</button>
           <div id='editor_holder' class="panel callout radius"></div>
-          <button id='save2' class='button tiny'>Save Sched</button>
-          <button id='load2' class='button tiny'>Load Sched</button>
+          <button id='save2' class='button '>Save Schedules</button>
+          <button id='load2' class='button '>Load Schedules</button>
       </div>
     </div>
 

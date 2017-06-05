@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>ESPrinkler2 Config</title>
+    <title>ESPrinkler2 Configuration</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <!-- Foundation CSS framework (Bootstrap and jQueryUI also supported) -->
     <link rel='stylesheet' href='/foundation.min.css'>
@@ -20,15 +20,53 @@
 
       var editor;
 
+      JSONEditor.defaults.custom_validators.push(function (schema, value, path) {
+        var errors = [];
+        if (schema.required && value === '') {
+          errors.push({
+            path: path,
+            property: 'required',
+            message: schema.title + ' is required'
+          });
+        }
+        if (schema.format === 'date') {
+          if (value !== '' && !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)) {
+            // Errors must be an object with `path`, `property`, and `message`
+            errors.push({
+              path: path,
+              property: 'format',
+              message: schema.title + ': Dates must be in the format "YYYY-MM-DD"'
+            });
+          }
+        }
+        if (schema.format === 'time') {
+          if (value !== '' && !/^[0-9]{1,2}:[0-9]{2}$/.test(value)) {
+            // Errors must be an object with `path`, `property`, and `message`
+            errors.push({
+              path: path,
+              property: 'format',
+              message: schema.title + ': Times must be in the format HH:MM'
+            });
+          }
+        }
+        return errors;
+      });
+
       function getConfig () {
         // console.log('get config');
         $.getJSON('config.json', function (data) {
           editor.setValue(data);
           // console.log(JSON.stringify(data));
+          $('.hostname').text(data.host);
+          document.title = data.host + ' Configuration';
+        }).fail(function () {
+          var data = editor.getValue();
+          $('.hostname').text(data.host);
+          document.title = data.host + ' Configuration';
         });
       }
       function saveConfig (data) {
-        $('#save, #save2').prop('disabled', true);
+        $('.savebutton').prop('disabled', true);
         var formData = new FormData();
         formData.append('data', new Blob([data], { type: 'text/json' }), '/config.json');
         $.ajax({
@@ -37,7 +75,9 @@
           processData: false,
           contentType: false,
           type: 'POST'
-        }).done(function () { $('#save, #save2').prop('disabled', false); });
+        }).done(function () {
+          $('.savebutton').prop('disabled', false);
+        });
       }
 
       $(function () {
@@ -53,23 +93,36 @@
           }
         });
 
-        $('#save, #save2').click(function () {
+        $('.savebutton').click(function () {
           // console.log(JSON.stringify(editor.getValue()));
-          saveConfig(JSON.stringify(editor.getValue()));
+          let errors = editor.validate();
+          // console.log(errors);
+          if (errors.length) {
+            var ss = '';
+            for (let i = 0; i < errors.length; i++) {
+              ss += errors[i].path + ':' + errors[i].message + '\r\n';
+            }
+            alert(ss);
+            return;
+          }
+          var data = editor.getValue();
+          $('.hostname').text(data.host);
+          document.title = data.host + ' Configuration';
+          saveConfig(JSON.stringify(data, null, 1));
         });
 
-        $('#load, #load2').click(function () {
+        $('.loadbutton').click(function () {
           getConfig();
         });
 
-        $('#restart, #restart2').click(function () {
+        $('.restartbutton').click(function () {
           $.get('restart', function (data) {
             alert(data);
           });
         });
 
         editor.on('ready', function () {
-          $("input[name='root[offsetGMT]']").after("<button id='settz'; class='button tiny'>Set Timezone from Browser</button>");
+          $("input[name='root[offsetGMT]']").after("<button id='settz' class='button tiny'>Set Time zone from Browser</button>");
           $('#settz').click(function () {
             var offset = new Date().getTimezoneOffset() * -60;
             var d = editor.getValue();
@@ -86,27 +139,27 @@
     <div class="row">
       <div class="large-12 columns">
         <div class="panel">
-          <h2>ESPrinkler2</h2>
+          <h2><span class="hostname">ESPrinkler2</span> Configuration</h2>
         </div>
       </div>
     </div>
     <div class="row">
-      <div class="small-2 columns">
-        <a href="/" class='button'>Go to Main Page</a>
+      <div class="large-2 columns">
+        <a href="/" class='button'>Main Page</a>
       </div>
-      <div class="small-2 columns">
-        <a href="/edit.html" class='button'>Go to FS Editor</a>
+      <div class="large-2 columns">
+        <a href="/edit.html" class='button'>FS Editor</a>
       </div>
     </div>
     <div class='row'>
       <div class="small-12 columns">
-          <button id='save' class='button tiny'>Save Config</button>
-          <button id='load' class='button tiny'>Load Config</button>
-          <button id='restart' class='button tiny'>Restart</button>
+          <button class='savebutton button '>Save Configuration</button>
+          <button class='loadbutton button '>Load Configuration</button>
+          <button class='restartbutton button '>Restart</button>
           <div id='editor_holder' class="panel callout radius"></div>
-          <button id='save2' class='button tiny'>Save Config</button>
-          <button id='load2' class='button tiny'>Load Config</button>
-          <button id='restart2' class='button tiny'>Restart</button>
+          <button class='savebutton button '>Save Configuration</button>
+          <button class='loadbutton button '>Load Configuration</button>
+          <button class='restartbutton button '>Restart</button>
       </div>
     </div>
 

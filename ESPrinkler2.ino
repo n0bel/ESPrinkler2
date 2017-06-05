@@ -52,27 +52,23 @@ U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 // #define EXTRA_DEBUG
 
 const char* configFile = "/config.json";   // The config file name
+const char* schedFile = "/sched.json";   // The sched file name
 
 // Note that these are the default values if no /config.json exists, or items are missing from it.
 
-char ssid[31] = { "SSID" };               // This is the access point to connect to
-char password[31] = { "PASSWORD" };       // And its password
+char ssid[31] = { "" };               // This is the access point to connect to
+char password[31] = { "" };       // And its password
 char host[31] = { "ESPrinkler2" };          // The host name for .local (mdns) hostname
+char assid[31] = { "" };               // This is the access point to connect to
+char apassword[31] = { "" };       // And its password
 
-int offsetGMT = -18000;       // Local timezone offset in seconds
-char offsetGMTstring[10] = { "-18000" };
+int offsetGMT = 0;       // Local timezone offset in seconds
+char offsetGMTstring[10] = { "0" };
 int relayState = 0;           // The current state of the relayState
 
 bool apMode = false;           // Are we in Acess Point mode?
 
 char timeServer[31] = { "0.pool.ntp.org" };   // the NTP timeServer to use
-char getTime[10] = { "02:01" };               // what time to resync with the NTP server
-int getHour = 2;                              // parsed hour of above
-int getMinute = 1;                            // parsed minute of above
-char resetTime[10] = { "00:00" };             // what time to auto reset 00:00=no reset
-int resetHour = 0;                            // parsed hour of above
-int resetMinute = 0;                          // parsed minute of above
-
 
 ESP8266WebServer server(80);  // The Web Server
 File fsUploadFile;            //holds the current upload when files are uploaded (see edit.htm)
@@ -114,7 +110,7 @@ String getContentType(String filename){
 }
 
 bool handleFileRead(String path){
-  DBG_OUTPUT_PORT.printf(" handleFileRead: %s\n", path.c_str());
+  DBG_OUTPUT_PORT.printf(" handleFileRead: %s %d\n", path.c_str(), ESP.getFreeHeap());
   if(path.endsWith("/")) path += "index.html";
 
   String contentType = getContentType(path);
@@ -150,6 +146,10 @@ void handleFileUpload(){
     if (upload.filename == configFile)
     {
       loadConfig();
+    }
+    if (upload.filename == schedFile)
+    {
+      loadSched();
     }
   }
 }
@@ -226,6 +226,46 @@ void loadConfig()
     }
     else
     {
+      const char *t;
+      t = root["ssid"]; if (t) strncpy(ssid,t,30);
+      t = root["password"]; if (t) strncpy(password,t,30);
+      t = root["assid"]; if (t) strncpy(assid,t,30);
+      t = root["apassword"]; if (t) strncpy(apassword,t,30);
+      t = root["host"]; if (t) strncpy(host,t,30);
+      t = root["timeServer"]; if (t) strncpy(timeServer,t,30);
+      t = root["offsetGMT"]; if (t) strncpy(offsetGMTstring,t,10);
+      offsetGMT = atoi(offsetGMTstring);
+
+
+      DBG_OUTPUT_PORT.printf("Config: host: %s ssid: %s assid: %s\n",host,ssid,assid);
+      DBG_OUTPUT_PORT.printf("  timeServer: %s offsetGMT:%d\n",
+        timeServer, offsetGMT);
+
+    }
+  }
+  else
+  {
+    DBG_OUTPUT_PORT.printf("config file: %s not found\n",configFile);
+  }
+}
+
+void loadSched()
+{
+  if(SPIFFS.exists(schedFile))
+  {
+    File file = SPIFFS.open(schedFile, "r");
+    char json[1000];
+    memset(json,0,sizeof(json));
+    file.readBytes(json,sizeof(json));
+    file.close();
+    StaticJsonBuffer<1000> jsonBuffer;
+    JsonObject& root = jsonBuffer.parseObject(json);
+    if (!root.success()) {
+        DBG_OUTPUT_PORT.printf("json parse of schedFile failed.\n");
+    }
+    else
+    {
+/*
       if (root.containsKey("ssid")) strncpy(ssid,root["ssid"],30);
       if (root.containsKey("password")) strncpy(password,root["password"],30);
       if (root.containsKey("host")) strncpy(host,root["host"],30);
@@ -244,15 +284,14 @@ void loadConfig()
       DBG_OUTPUT_PORT.printf("Config: host: %s ssid: %s timeServer: %s\n",host,ssid,timeServer);
       DBG_OUTPUT_PORT.printf("getTime: %s %d %d resetTime:%s %d %d offsetGMT:%d\n",
         getTime, getHour, getMinute, resetTime, resetHour, resetMinute, offsetGMT);
-
+*/
     }
   }
   else
   {
-    DBG_OUTPUT_PORT.printf("config file: %s not found\n",configFile);
+    DBG_OUTPUT_PORT.printf("sched file: %s not found\n",schedFile);
   }
 }
-
 
 void setRelays()
 {
@@ -376,9 +415,10 @@ void startMDNS()
 bool ntpStarted = false;
 void startNTP()
 {
+    if (timeServer[0] == '\0') return;
     if (ntpStarted) return;
     ntpStarted = true;
-    DBG_OUTPUT_PORT.printf("Starting NTP\n");
+    DBG_OUTPUT_PORT.printf("Starting NTP %s\n",timeServer);
     NTP.begin(timeServer,0,false);
 }
 void stopNTP()
@@ -419,7 +459,10 @@ void apModeTimeout()
   apModeTimerId = -1;
   setApMode(true);
   setBlinker(100);
-  setStaModeTimeout(600000);
+  if (ssid[0] != '\0') // if no ssid
+  {
+    setStaModeTimeout(600000);
+  }
 }
 
 void staModeTimeout()
@@ -446,12 +489,22 @@ void setApMode(bool mode)
       delay(500);
       WiFi.softAPmacAddress(mac);
       delay(500);
-      char assid[31];
-      sprintf(assid,"%s_%02x%02x%02x",host,mac[3],mac[4],mac[5]);   // making a nice unique SSID
+      if (assid[0] == '\0')
+        sprintf(assid,"%s_%02x%02x%02x",host,mac[3],mac[4],mac[5]);   // making a nice unique SSID
       DBG_OUTPUT_PORT.printf("SoftAP ssid:%s\n",assid);
-      WiFi.softAP(assid);
+      if (strlen(apassword) >= 8) // softAP doesn't work if password < 8
+      {
+        WiFi.softAP(assid,apassword);
+      }
+      else
+      {
+        WiFi.softAP(assid);
+      }
       DBG_OUTPUT_PORT.printf("AP mode. IP address: %s\n",WiFi.softAPIP().toString().c_str());
-      displayStatus(0, "AP:%s",WiFi.softAPIP().toString().c_str());
+      #ifdef EXTRA_DEBUG
+      WiFi.printDiag(DBG_OUTPUT_PORT);
+      #endif
+      displayStatus(0, "AP:%s %s",WiFi.softAPIP().toString().c_str(),assid);
     }
     else
     {
@@ -459,7 +512,14 @@ void setApMode(bool mode)
       displayStatus(0, "Try: %s", ssid);
       WiFi.mode(WIFI_STA);
       delay(500);
-      WiFi.begin(ssid, password);
+      if (password[0] == '\0')
+      {
+        WiFi.begin(ssid);
+      }
+      else
+      {
+        WiFi.begin(ssid, password);
+      }
     }
 }
 
@@ -524,6 +584,7 @@ void setup(void){
   }
 
   loadConfig();
+  loadSched();
 
   setRelays();
 
@@ -533,9 +594,17 @@ void setup(void){
   onSTADisconnectedHandler = WiFi.onStationModeDisconnected(onSTADisconnected);
   NTP.onNTPSyncEvent(handleNtpSync);
   WiFi.persistent(false);
-  apMode=true; // forced mode change
-  setApMode(false);
-  setApModeTimeout(60000);
+  if (ssid[0] == '\0')  // no ssid, therefore go to apmode
+  {
+    apMode=false; // forced mode change
+    setApMode(true);
+  }
+  else
+  {
+    setApModeTimeout(60000);
+    apMode=true; // forced mode change
+    setApMode(false);
+  }
 
   setTimedFunc(true, &displayTimeId, 1000, displayTime, "displayTime");
 
@@ -567,7 +636,9 @@ void setup(void){
     {
       json += String( "\"zone") + String(i) + String(relayState&(1<<i) ? "\":\"on\"," : "\":\"off\",");
     }
-    json += String("\"time\":")+String(now());
+    json += String("\"time\":")+String(now())+",";
+    json += String("\"offsetGMT\":")+String(offsetGMT)+",";
+    json += String("\"host\":\"")+String(host)+"\"";
     json += "}";
     server.send(200, "text/json", json);
     DBG_OUTPUT_PORT.printf("status %s\n",json.c_str());
@@ -583,6 +654,18 @@ void setup(void){
     DBG_OUTPUT_PORT.printf("toggle %d = %s\n",i,relayState&(1<<i)?"on":"off");
     setRelays();
   });
+  server.on("/settime", HTTP_GET, [](){
+    int i = 0;
+    if (server.args() > 0)
+    {
+      i = atoi(server.arg("time").c_str());
+    }
+    setTime(i);
+    server.send(200, "text/text", "OK");
+    DBG_OUTPUT_PORT.printf("settime %d\n",i);
+    setRelays();
+  });
+
   server.on("/restart", HTTP_GET, [](){
     server.send(200, "text/text", "Restarting.... Wait a minute or so and then refresh.");
     delay(2000);

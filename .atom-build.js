@@ -116,18 +116,21 @@ module.exports = {
   cmd: pathRunArduino,
   args: [ '--verify' ].concat(xargs),
   name: 'compile',
+  atomCommandName: 'build:compile',
   cwd: '{PROJECT_PATH}',
   sh: true,
   preBuild: terminalKill,
   functionMatch: functionMatch,
   targets: {
     upload: {
+      atomCommandName: 'build:upload',
       cmd: pathRunArduino,
       args: [ '--upload' ].concat(xargs),
       preBuild: terminalKill,
       functionMatch: functionMatch
     },
     upload_then_terminal: {
+      atomCommandName: 'build:upload_then_terminal',
       cmd: pathRunArduino,
       args: [ '--upload' ].concat(xargs),
       functionMatch: functionMatch,
@@ -135,6 +138,7 @@ module.exports = {
       postBuild: terminalStart
     },
     justupload: {
+      atomCommandName: 'build:just_upload',
       cmd: pathRunEsptool,
       preBuild: terminalKill,
       args: [ '-vv', '-cd', resetMethod,
@@ -145,6 +149,7 @@ module.exports = {
     },
     spiffs:
     {
+      atomCommandName: 'build:spiffs',
       cmd: 'echo Prep and Upload spiffs',
       preBuild: terminalKill,
       args: [
@@ -171,12 +176,14 @@ module.exports = {
     },
     terminal:
     {
+      atomCommandName: 'build:terminal',
       preBuild: terminalKill,
       cmd: 'echo Running Terminal',
       postBuild: terminalStart
     },
     reset_then_terminal:
     {
+      atomCommandName: 'build:reset_then_terminal',
       preBuild: terminalKill,
       cmd: pathRunEsptool,
       args: [ '-vv',
@@ -187,6 +194,7 @@ module.exports = {
       postBuild: terminalStart
     },
     clean: {
+      atomCommandName: 'clean',
       cmd: 'del {PROJECT_PATH}\\build /s/q && rmdir {PROJECT_PATH}\\build /s/q'
     }
   }

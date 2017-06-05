@@ -29,6 +29,7 @@
 				"description": "Start time for this schedule  HH:MM",
 				"type": "string",
 				"format": "time",
+				"required": true,
 				"maxLength": 5,
 				"propertyOrder": 20
 			},

@@ -1,3 +1,12 @@
+#
+# ESPrinkler2 testserver.py
+#
+# This is a smiple server so data-uncompressed can be tested
+# and edited using a local browser to http://localhost
+# Note that data-uncompressed does not save config.json nor sched.json
+# This server saves that data as strings
+# Similarly current time and zone status are simulated
+#
 import SimpleHTTPServer
 from urlparse import urlparse, parse_qs
 import SocketServer
@@ -11,6 +20,13 @@ zones = [
         'off', 'off', 'off', 'off'
         ]
 
+htime = 0
+ltime = time.time()
+offsetGMT = 0
+config = None
+sched = None
+host = 'ESPrinkler2'
+
 
 class ESPrinkler2RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         def xsend(self, content, contentType="text/html"):
@@ -23,16 +39,26 @@ class ESPrinkler2RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             self.wfile.write(content)
 
         def do_GET(self):
-            global zones
+            global zones, htime, ltime, config, sched, host, offsetGMT
             print self.path
             query_components = parse_qs(urlparse(self.path).query)
             self.path = self.path.split('?', 1)[0]
             print self.path
             if self.path == '/status':
-                v = {'time': int(time.time())}
+                htime += time.time() - ltime
+                ltime = time.time()
+                v = {'time': int(htime), 'host': host, 'offsetGMT': offsetGMT}
                 for i in range(0, 8):
                     v['zone'+str(i)] = zones[i]
                 self.xsend(json.dumps(v), "text/json")
+            elif self.path == '/settime':
+                htime = 0
+                try:
+                    htime = int(query_components['time'][0])
+                except:
+                    pass
+                ltime = time.time()
+                self.xsend("ok")
             elif self.path == '/toggle':
                 i = 0
                 try:
@@ -55,6 +81,22 @@ class ESPrinkler2RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
                 for f in os.listdir('.'):
                     v.append({'type': 'file', 'name': f})
                 self.xsend(json.dumps(v), "text/json")
+            # config.json is not saved, but only temp string storage
+            elif self.path == '/config.json':
+                if config is None:
+                    self.send_error(404, "File not found")
+                    return None
+                else:
+                    print('config sending\n'+config)
+                    self.xsend(config)
+            # sched.json is not saved, but only temp string storage
+            elif self.path == '/sched.json':
+                if sched is None:
+                    self.send_error(404, "File not found")
+                    return None
+                else:
+                    print('sched sending\n'+sched)
+                    self.xsend(sched)
             else:
                 return SimpleHTTPServer.SimpleHTTPRequestHandler.do_GET(self)
 
@@ -112,6 +154,7 @@ class ESPrinkler2RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             self.send_response(404)
 
         def do_POST(self):
+            global config, sched, host, offsetGMT
             self.path = self.path.split('?', 1)[0]
             print self.path
             if self.path == '/edit':
@@ -139,6 +182,21 @@ class ESPrinkler2RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
                             f.write(file_data)
                             f.close()
                             print 'wrote:'+fn
+                            # config and sched are never saved for testing
+                            if fn == 'config.json' or fn == 'sched.json':
+                                os.remove(fn)
+                            if fn == 'config.json':
+                                config = file_data
+                                try:
+                                    tt = json.loads(file_data)
+                                    host = tt['host']
+                                    offsetGMT = int(tt['offsetGMT'])
+                                except:
+                                    pass
+                                print('config\n'+file_data)
+                            if fn == 'sched.json':
+                                sched = file_data
+                                print('sched\n'+file_data)
                         del file_data
                     else:
                         # Regular form value

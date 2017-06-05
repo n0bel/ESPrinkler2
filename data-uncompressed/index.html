@@ -14,6 +14,24 @@
     </style>
   <script>
     /* global $, alert */  /* for eslint */
+
+    function ptime (date) {
+      var zeroPad = function (nNum, nPad) {
+        return ('' + (Math.pow(10, nPad) + nNum)).slice(1);
+      };
+      return zeroPad(date.getUTCHours(), 2) +
+              ':' +
+              zeroPad(date.getUTCMinutes(), 2) +
+              ':' +
+              zeroPad(date.getUTCSeconds(), 2) +
+              ' ' +
+              zeroPad(date.getUTCFullYear(), 4) +
+              '/' +
+              zeroPad(date.getUTCMonth() + 1, 2) +
+              '/' +
+              zeroPad(date.getUTCDate(), 2);
+    }
+
     var statusTime;
     var intervalHandle = null;
     function getStatus () {
@@ -29,19 +47,25 @@
             b.addClass('success');
           }
         }
-        statusTime = data.time;
-        $('#stime').text(new Date(statusTime * 1000).toString());
+        statusTime = data.time + data.offsetGMT;
+        var timestr = ptime(new Date(statusTime * 1000)) + ' (Timezone Offset = ' + data.offsetGMT + ')';
+        if (statusTime < 10000000) {
+          timestr = 'Time not Set';
+        }
+        $('.hostname').text(data.host);
+        document.title = data.host + ' Status';
+        $('#stime').text(timestr);
         intervalHandle = window.setInterval(function () {
           statusTime++;
-          $('#stime').text(new Date(statusTime * 1000).toString());
+          var timestr = ptime(new Date(statusTime * 1000)) + ' (Timezone Offset = ' + data.offsetGMT + ')';
+          if (statusTime < 10000000) {
+            timestr = 'Time not Set';
+          }
+          $('#stime').text(timestr);
         }, 1000);
       });
     }
-    function toggle (which) {
-      $.get('/toggle', { zone: which }, function () {
-        getStatus();
-      });
-    }
+
     $(function () {
       $.ajaxSetup({ cache: false });
 
@@ -49,15 +73,25 @@
         return this.id.match(/^zs([\d])/);
       }).click(function () {
         let mm = this.id.match(/^zs([\d])/);
-        toggle(mm[1]);
+        $.get('/toggle', { zone: mm[1] }, function () {
+          getStatus();
+        });
       });
+
       $('#restart').click(function () {
-        $.get('restart', function (data) {
+        $.get('/restart', function (data) {
           alert(data);
         });
       });
+
       $('#refresh').click(function () {
         getStatus();
+      });
+
+      $('#settime').click(function () {
+        $.get('/settime', { time: new Date().getTime() / 1000 | 0 }, function () {
+          getStatus();
+        });
       });
 
       getStatus();
@@ -68,21 +102,21 @@
     <div class="row">
       <div class="large-12 columns">
         <div class="panel">
-          <h2>ESPrinkler2</h2>
+          <h2><span class="hostname">ESPrinkler2</span> Status</h2>
         </div>
       </div>
     </div>
     <div class="row" >
-      <div class="small-3 columns">
-        <a href="sched.html" class='button'>Go to Schedule</a>
+      <div class="large-3 columns">
+        <a href="sched.html" class='button'>Schedules</a>
       </div>
-      <div class="small-3 columns">
-        <a href="config.html" class='button'>Go to Config</a>
+      <div class="large-3 columns">
+        <a href="config.html" class='button'>Configuration</a>
       </div>
-      <div class="small-3 columns">
+      <div class="large-3 columns">
         <button id='refresh' class='button'>Refresh</button>
       </div>
-      <div class="small-3 columns">
+      <div class="large-3 columns">
         <button id='restart' class='button'>Restart</button>
       </div>
     </div>
@@ -94,7 +128,8 @@
             <div class="small-12 columns panel callout radius">
               <div class="row">
                 <span class='small-4 columns '>Time</span>
-                <span id='stime' class='small-8 columns'>??????</span>
+                <span id='stime' class='small-6 columns'>??????</span>
+                <button id='settime' class='button tiny small-2 columns'>Set Time from Browser</button>
               </div>
             </div>
           </div>

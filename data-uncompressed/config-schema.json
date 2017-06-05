@@ -1,5 +1,5 @@
 {
-	"title": "Config",
+	"title": "Configuration",
 	"type": "object",
 	"properties":
 	{
@@ -7,43 +7,58 @@
 		{
 			"title": "Host Name",
 			"type": "string",
+			"default":"ESPrinkler2",
 			"propertyOrder": 10
 		},
 		"ssid":
 		{
-			"title": "SSID to of the AP connect to",
+			"title": "Your access point SSID (your router).",
+			"description": "Blank to disable connecting to an access point.",
 			"type": "string",
+			"default":"",
 			"propertyOrder": 20
 		},
 		"password":
 		{
-			"title": "Password of the AP",
+			"title": "Password of your access point.",
 			"type": "string",
 			"format": "password",
+			"default":"",
 			"propertyOrder": 30
+		},
+		"assid":
+		{
+			"title": "SSID when acting as an access point.",
+			"description": "Blank will create a suitable ssid.",
+			"type": "string",
+			"default":"",
+			"propertyOrder": 40
+		},
+		"apassword":
+		{
+			"title": "Password when acting as an access point.",
+			"description": "Blank for no password. (Passwords shorter than 8 characters results in no password)",
+			"type": "string",
+			"format": "password",
+			"default":"",
+			"propertyOrder": 50
 		},
 		"offsetGMT":
 		{
 			"title": "Timezone Offset (seconds)",
 			"type": "integer",
-			"default": -18000,
-			"propertyOrder": 40
+			"default": 0,
+			"minimum":-86400,
+			"maximum":86400,
+			"propertyOrder": 60
 		},
 		"timeServer":
 		{
-			"title": "Timeserver",
+			"title": "NTP Timeserver",
+			"description": "Blank to disable NTP.",
 			"type": "string",
-			"default": "0.pool.ntp.org",
-			"propertyOrder": 50
-		},
-		"resetTime":
-		{
-			"title": "Reset the device at this time.",
-			"description": "00:00 to disable.",
-			"type": "string",
-			"format": "time",
-			"default": "00:00",
-			"propertyOrder": 60
+			"default": "pool.ntp.org",
+			"propertyOrder":750
 		}
 	}
 }
