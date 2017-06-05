@@ -70,6 +70,17 @@ bool apMode = false;           // Are we in Acess Point mode?
 
 char timeServer[31] = { "0.pool.ntp.org" };   // the NTP timeServer to use
 
+#define MAX_SCHED 30
+struct _sched {
+  int zone;     // 0-7 and -1 for reset
+  int days;     // day bits 0-6 = sunday-saturday and 7 and 8 are even and odd
+  time_t start; // seconds like 02:00 am is 120 * 3600
+  time_t begin; // begin date
+  time_t end;   // end date
+  time_t next;  // next time this should turn on a relay
+  time_t last;  // last time it ran
+  time_t stop;  // when the relay should turn off
+} sched[MAX_SCHED] = { 0 };
 ESP8266WebServer server(80);  // The Web Server
 File fsUploadFile;            //holds the current upload when files are uploaded (see edit.htm)
 WiFiUDP udp;
