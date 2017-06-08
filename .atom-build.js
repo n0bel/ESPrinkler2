@@ -6,13 +6,13 @@
 /* global atom */
 /* eslint-env node, atomtest */
 
-var pathToArduino = '..\\..\\..\\ides\\arduino-1.6.11\\';
+var pathToArduino = '..\\..\\..\\ides\\arduino-1.8.3\\';
 var pathRunArduino = pathToArduino + 'arduino_debug.exe';
 var pathRunMkspiffs = pathToArduino + 'portable\\packages\\esp8266\\tools\\mkspiffs\\0.1.2\\mkspiffs.exe';
 var pathRunEsptool = pathToArduino + 'portable\\packages\\esp8266\\tools\\esptool\\0.4.9\\esptool.exe';
 var pathRunTerminal = '..\\..\\..\\terminal\\termie.exe';
 var pathRunGzip = '..\\..\\..\\Utility\\gzip.exe';
-var port = 'COM3';
+var port = 'COM4';
 var terminalBaud = '74880';
 var resetMethod = 'nodemcu';
 var terminalProcess = null;
@@ -194,8 +194,18 @@ module.exports = {
       postBuild: terminalStart
     },
     clean: {
-      atomCommandName: 'clean',
+      atomCommandName: 'build:clean',
       cmd: 'del {PROJECT_PATH}\\build /s/q && rmdir {PROJECT_PATH}\\build /s/q'
+    },
+    list_comm_ports: {
+      atomCommandName: 'build:list_comm_ports',
+      cmd: 'wmic',
+      args: [
+        'path',
+        'Win32_PnPEntity',
+        'where', 'pnpclass=\'ports\'', 'get name',
+        ' && ping 127.0.0.1 -n 15 >nul'
+      ]
     }
   }
 };
