@@ -1,96 +1,87 @@
 # ESPrinkler2
-### A web server and esp8266 based automated pet feeder controller.
+### Arduino/ESP8266 based sprinkler Controller.
 
-This project uses ESP8266WebServer and SPIFFS to create a web enabled automated pet controller.
+#### NOTICE ALPHA version and Incomplete Documentation
 
-![EspFeeder Collage](https://raw.githubusercontent.com/n0bel/EspFeeder/master/Gallery/EspFeederStatusPage_Fotor_Collage.jpg)
+This is a totally rewritten second version of https://github.com/n0bel/ESPrinkler Consider that code now totally obsolete.
 
-Two servos control the lids of two feeding trays.  Two buttons correspondingly control each servo.  Once configured you can set the time when each servo is activated.
+This project uses Arduino/ESP8266 to create a web based lawn/garden sprinkler controller.
+
+## Features
+
+* Web server based (ESP8266WebServer)
+* Responsive UI (desktop/mobile/tablet) written around Jquery, Foundation5, and jsoneditor
+* 8 Zones (relays)
+* Up to 30 Schedules
+* NTP Time (or set from browser)
+* RTC Option pcf8563
+* OLED Display Option
 
 ## Requirements
 
 ### Hardware
 
-* ESP-xx with 4 gpio pins available.  Plus an additional one if you'd like status sounds. (ESP-03, ESP-07, ESP-12x, nodemcu, hazza) (probably others)
-* If using a esp-xx (as opposed to a nodemcu or hazza)
-   * 3.3v regulator
-   * 2 SPST pushe buttons (reset and program)
-* 2 SPST push buttons
-* 2 servos
-* A Pet Feeder, something like this: https://www.amazon.com/gp/product/B01IPF3N6Y
+* ESP-12x (nodemcu, hazza, D1 Mini) (probably others)
+* 74HC595
+* ST1306 OLED
+* PCF8563
+* Relays
+
 
 ### Software
-* Arduino-1.6.11
+* Arduino-1.8.3
 * ESP8266/Arduino :Additional Boards Manager URL: http://arduino.esp8266.com/stable/package_esp8266com_index.json
-* ESP8266FS plugin, installed in tools https://github.com/esp8266/arduino-esp8266fs-plugin/releases/download/0.2.0/ESP8266FS-0.2.0.zip
-* Bounce2 Library, installed in library https://github.com/thomasfredericks/Bounce2/releases/tag/V2.21
-* ArduinoJson Library, install in libarry https://github.com/bblanchon/ArduinoJson/releases/tag/v5.6.7
-    * (the libraries can be installed with the library manager instead)
+* Time 1.5.0 https://github.com/PaulStoffregen/Time
+* SimpleTimer https://github.com/jfturcot/SimpleTimer (http://playground.arduino.cc/Code/SimpleTimer)
+* NtpClientLib 2.0.5 https://github.com/gmag11/NtpClient
+* ArduinoJson 5.6.7 https://github.com/bblanchon/ArduinoJson (https://bblanchon.github.io/ArduinoJson/)
+* U8G2Lib 2.13.5 https://github.com/olikraus/u8g2
+* orbitalair-arduino-rtc-pcf8563  https://bitbucket.org/orbitalair/arduino_rtc_pcf8563/downloads/ (https://playground.arduino.cc/Main/RTC-PCF8563)
+
 
 
 ## General Instructions
 
 ### Hardware
 
-Wireup according to the picture.  You can change which pin you use for each function near the top of the
-sketch where it refers to BUTTON1, BUTTON2, SERVO1, SERVO2 and TONE.  I use an ESP-12, so the code
-is showing the pins I chose for it.
-
-Arrange the servos and the buttons on your pet feeder as shown on the schematic, or differently if you're using some other kind of feeder.   * The FTDI, USB and Regulator may not be needed depending on which ESP you're using (i.e. nodemcu/hazza, etc)
-
-![EspFeeder Schematic](https://raw.githubusercontent.com/n0bel/EspFeeder/master/Gallery/EspFeeder_schem.jpg)
 
 ### Software
 Don't forget to restart the Arduino IDE after installing the libraries and boards.
 
 Set your esp settings.. the board, program method, flash size and spiffs size.
 
-This uses the SPIFFS file system.  So we need to load that in your esp-xx first.
+This uses the SPIFFS file system.  So we need to load that in your esp-12x first.
 Upload the contents of the data folder with MkSPIFFS Tool ("ESP8266 Sketch Data Upload" in Tools menu in Arduino IDE)
 
 Then compile and upload the .ino.
 
-### Quick Test
-You should be able to push the buttons and the servos will move.  Check out the video:
-[![EspFeeder Quick Test](https://raw.githubusercontent.com/n0bel/EspFeeder/master/Gallery/2016-10-15_20-26-49.jpg)](https://www.youtube.com/watch?v=8MBRnC_cMpc "EspFeeder Quick Test")
-
-
 ### Setup
 
-When initially powered on, the internet access point will not be setup.  The EspFeeder will give
-up on an access point after 60 seconds, and switch to AP mode.   It will be come an access point
+When initially powered on, the internet access point will not be setup.  The ESPrinkler will therefore switch to AP mode.   It will be come an access point
 in itself.
 
-So connect to EspFeeder_XXXXXX with a wifi enabled device (no password).
+So connect to ESPrinkler2_XXXXXX with a wifi enabled device (no password).
 
 Browse to 192.168.4.1
 
-A simple setup page will appear where you can put in an SSID and a password of the
-access point it should connect to.
+The initial page will let you toggle the relays on/off to test.
 
-Save, then wait a minute for reboot.
+But the first thing you'll want to do is click "Configuration", and:
+* set your timezone offset (click set from browser if you wish)
+* Set your access point name and password. You have 2 choices here..
+  * If you want to connect the device to your netork, fill in your access point SSID and password.
+  * If you want to leave it as a stand alone access point all by itself, fill in the second set of SSID and Password
 
-Now you can access the EspFeeder's ip and the feeder will be on the local netowrk.
+Click Save Configuration, then click Restart.
 
 What is it's IP?  If your computer supports mDNS (Anything but windows, but even
 on windows it'll be there if you have loaded iTunes), you can access it with the following
-url: http://espfeeder.local/   If you don't have mDNS available, you must find the IP
-address of the EspFeeder through one of the following methods (or make up your own method)
+url: http://ESPrinkler2.local/  If you don't have mDNS available, you must find the IP address of the ESPrinkler2 through one of the following methods (or make up your own method)
 
+* Look at the OLED display (if you're using one)
 * Log into your router and look at the dhcp leases (sometimes called dhcp client list)
 find the entry that shows ESP_xxxxxx
 * Connect a serial ttl dongle to the EspFeeder, set the baud rate to 74880.  During startup, you'll see the IP address shown.
 * Get mDNS on your computer: here's some info for windows:
 http://stackoverflow.com/questions/23624525/standard-mdns-service-on-windows
 * ping from a computer that does handle mDNS   --  ping espfeeder.local
-
-Hopefully you'll then see this:
-![Status Page](https://github.com/n0bel/EspFeeder/blob/master/Gallery/EspFeederStatusPage.jpg?raw=true)
-
-And if you click Go To Config you'll see this:
-![Config Page](https://github.com/n0bel/EspFeeder/blob/master/Gallery/EspFeederConfigPage.jpg?raw=true)
-
-### Mess with your cat!
-[![EspFeeder Quick Demo](https://raw.githubusercontent.com/n0bel/EspFeeder/master/Gallery/2016-10-15_21-00-21.jpg)](https://www.youtube.com/watch?v=8HrXfQ1xYFg "EspFeeder Quick Demo")
-
-[![EspFeeder In Action](https://raw.githubusercontent.com/n0bel/EspFeeder/master/Gallery/2016-10-15_22-10-34.jpg)](https://www.youtube.com/watch?v=ZF5p_v1fCcI "EspFeeder in Action")
