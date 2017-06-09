@@ -10,12 +10,14 @@
 */
 
 /* Requirements:
-  Arduino-1.6.11
+  Arduino-1.8.3
   ESP8266/Arduino :Additional Boards Manager URL: http://arduino.esp8266.com/stable/package_esp8266com_index.json
-  ESP8266FS plugin, installed in tools https://github.com/esp8266/arduino-esp8266fs-plugin/releases/download/0.2.0/ESP8266FS-0.2.0.zip
-  Bounce2 Library, installed in library https://github.com/thomasfredericks/Bounce2/releases/tag/V2.21
-  ArduinoJson Library, install in libarry https://github.com/bblanchon/ArduinoJson/releases/tag/v5.6.7
-      (the libraries can be installed with the library manager instead)
+  Time 1.5.0 https://github.com/PaulStoffregen/Time
+  SimpleTimer https://github.com/jfturcot/SimpleTimer (http://playground.arduino.cc/Code/SimpleTimer)
+  NtpClientLib 2.0.5 https://github.com/gmag11/NtpClient
+  ArduinoJson 5.6.7 https://github.com/bblanchon/ArduinoJson (https://bblanchon.github.io/ArduinoJson/)
+  U8G2Lib 2.13.5 https://github.com/olikraus/u8g2 
+  orbitalair-arduino-rtc-pcf8563  https://bitbucket.org/orbitalair/arduino_rtc_pcf8563/downloads/ (https://playground.arduino.cc/Main/RTC-PCF8563)
 
   Don't forget to restart the Arduino IDE after installing these things.
 
@@ -78,15 +80,17 @@ char timeServer[31] = { "0.pool.ntp.org" };   // the NTP timeServer to use
 
 #define MAX_SCHED 30
 struct _sched {
-  int zone;       // 0-7 and -1 for reset
-  int days;       // day bits 0-6 = sunday-saturday and 7 and 8 are even and odd
+  int zone;       // 1-8 and 100 for reset
+  int days;       // day bits 0-6 = sunday-saturday and 8 and 9 are even and odd
   time_t start;   // seconds like 02:00 am is 120 * 3600
+  int duration;   // minutes
   time_t begin;   // begin date
   time_t end;     // end date
   time_t next;    // next time this should turn on a relay
-  time_t last;    // last time it ran
   time_t stop;    // when the relay should turn off
 } sched[MAX_SCHED] = { 0 };
+
+
 ESP8266WebServer server(80);  // The Web Server
 File fsUploadFile;            // holds the current upload when files are
                               // uploaded (see edit.htm)
@@ -261,6 +265,96 @@ void loadConfig() {
   }
 }
 
+int computeDayFromTm(tmElements_t *tm) {
+  // bits 0-6 = day of week
+  // bits 8 == even Day
+  // bit 9 == odd Day
+  return (1 << (tm->Wday - 1)) | ( 1 << ((tm->Day & 1) + 8));
+}
+
+#ifdef EXTRA_DEBUG
+void dumpSched(const char *m, struct _sched *s) {
+  DBG_OUTPUT_PORT.printf(
+    "%s: %08x z:%d s:%d d:%02x b:%d e:%d n:%d o:%d d:%d\n",
+    m, s, s->zone, s->start, s->days, s->begin, s->end,
+    s->next, s->stop, s->duration);
+    DBG_OUTPUT_PORT.printf("%s: next:%s",
+      m, timeStr(s->next+offsetGMT));
+    DBG_OUTPUT_PORT.printf(" stop:%s\n", timeStr(s->stop+offsetGMT));
+}
+#endif
+
+void computeNext(struct _sched *s) {
+  if (now() < 10000000) {
+    s->next = s->stop = 0;
+    return;
+  }
+  time_t midnightLocal = (now() + offsetGMT) / 86400;
+  if (s->begin > 10000000 && s->begin > now())
+    midnightLocal = s->begin / 86400;
+  midnightLocal = midnightLocal * 86400;
+  time_t midnightLocalAsGmt = midnightLocal - offsetGMT;
+  int day = 0xffff;
+  s->next = midnightLocalAsGmt + s->start - 86400;
+  do {
+    s->next += 86400;
+    tmElements_t tm;
+    breakTime(s->next + offsetGMT, tm);
+    day = computeDayFromTm(&tm);
+    if (s->next > s->end) {
+      s->next = 0;
+      break;
+    }
+    #ifdef EXTRA_DEBUG
+    dumpSched("computeNext", s);
+    DBG_OUTPUT_PORT.printf("computeNext: day=%02x tm.Day=%d tm.Wday=%d\n",
+      day, tm.Day, tm.Wday);
+    #endif
+  } while (now() >= s->next
+      || (day & (s->days)) == 0);
+  if (s->stop == 0 && s->next > 0) {
+    s->stop = s->next + s->duration;
+  }
+}
+
+void checkSched() {
+  time_t timeNow = now();
+  for (int i = 0; i < MAX_SCHED; i++) {
+    if (sched[i].zone > 0) {
+      #ifdef EXTRA_DEBUG
+      dumpSched("checkSched", &sched[i]);
+      #endif
+      if (sched[i].stop > 0 && timeNow >= sched[i].stop) {
+        sched[i].stop = 0;
+        if (sched[i].next > 0) {
+          sched[i].stop = sched[i].next + sched[i].duration;
+        }
+        if (sched[i].zone < 9) {
+          relayState &= ~(1 << (sched[i].zone - 1));
+          setRelays();
+        }
+      }
+      if (sched[i].next > 0 && timeNow >= sched[i].next) {
+        if (sched[i].zone == 100) {
+          // reset
+        } else {
+          relayState |= (1 << (sched[i].zone - 1));
+          setRelays();
+        }
+        computeNext(&sched[i]);
+      }
+    }
+  }
+}
+
+void recalcSched() {
+  for (int i = 0; i < MAX_SCHED; i++) {
+    if (sched[i].zone > 0) {
+      computeNext(&sched[i]);
+    }
+  }
+}
+
 void loadSched() {
   if (SPIFFS.exists(schedFile)) {
     File file = SPIFFS.open(schedFile, "r");
@@ -269,30 +363,98 @@ void loadSched() {
     file.readBytes(json, sizeof(json));
     file.close();
     StaticJsonBuffer<1000> jsonBuffer;
-    JsonObject& root = jsonBuffer.parseObject(json);
+    JsonArray& root = jsonBuffer.parseArray(json);
     if (!root.success()) {
         DBG_OUTPUT_PORT.printf("json parse of schedFile failed.\n");
     } else {
-/*
-      if (root.containsKey("ssid")) strncpy(ssid,root["ssid"],30);
-      if (root.containsKey("password")) strncpy(password,root["password"],30);
-      if (root.containsKey("host")) strncpy(host,root["host"],30);
-      if (root.containsKey("timeServer")) strncpy(timeServer,root["timeServer"],30);
-      if (root.containsKey("getTime")) strncpy(getTime,root["getTime"],10);
-      if (root.containsKey("resetTime")) strncpy(resetTime,root["resetTime"],10);
+      tmElements_t tm;
+      relayState = 0;
+      setRelays();
+      for (int i = 0; i < MAX_SCHED; i++) {
+        const char *zoneString = root[i]["zone"];
+        const char *startTime = root[i]["startTime"];
+        sched[i].zone = 0;
+        sched[i].next = 0;
+        sched[i].duration = 0;
+        sched[i].stop = 0;
+        if (zoneString && zoneString[0] != '\0'
+            && startTime && startTime[0] != '\0') {
+//
+          if (strstr(zoneString, "Zone ") == zoneString) {
+            sched[i].zone = zoneString[5] - '0';
+          }
 
-      if (root.containsKey("offsetGMT")) strncpy(offsetGMTstring,root["offsetGMT"],10);
-      offsetGMT = atoi(offsetGMTstring);
+          if (strstr(zoneString, "Restart") == zoneString) {
+            sched[i].zone = 100;
+          }
 
-      getHour = atoi(getTime);
-      if (strchr(getTime,':')) getMinute = atoi(strchr(getTime,':')+1);
-      resetHour = atoi(resetTime);
-      if (strchr(resetTime,':')) resetMinute = atoi(strchr(resetTime,':')+1);
+          sched[i].start = atoi(startTime) * 3600 +
+                           atoi(startTime + 3) * 60;
 
-      DBG_OUTPUT_PORT.printf("Config: host: %s ssid: %s timeServer: %s\n",host,ssid,timeServer);
-      DBG_OUTPUT_PORT.printf("getTime: %s %d %d resetTime:%s %d %d offsetGMT:%d\n",
-        getTime, getHour, getMinute, resetTime, resetHour, resetMinute, offsetGMT);
-*/
+          const char *beginDate = root[i]["begin"];
+          if (!beginDate || beginDate[0] == '\0') {
+            sched[i].begin = 10000000;   // more or less beginning of time
+          } else  {
+            tm.Second = tm.Hour = tm.Minute = tm.Wday = 0;
+            tm.Year = atoi(beginDate) - 1970;
+            tm.Month = atoi(beginDate+5);
+            tm.Day = atoi(beginDate+8);
+            sched[i].begin = makeTime(tm) - offsetGMT;
+          }
+
+          const char *endDate = root[i]["end"];
+          if (!endDate || endDate[0] == '\0') {
+            sched[i].end = 0x7fffffff;   // more or less end of time
+          } else {
+            tm.Second = tm.Hour = tm.Minute = tm.Wday = 0;
+            tm.Year = atoi(endDate) - 1970;
+            tm.Month = atoi(endDate+5);
+            tm.Day = atoi(endDate+8);
+            sched[i].end = makeTime(tm) - offsetGMT;
+          }
+
+          const char *duration = root[i]["duration"];
+          if (!duration || duration[0] == '\0') {
+            sched[i].duration = 15 * 60;  // default = 15 minutes
+          } else {
+            sched[i].duration = atoi(duration) * 60;
+          }
+
+
+          sched[i].days = 0;
+          for (int j = 0; j < 10; j++) {
+            const char *dayString = root[i]["days"][j];
+            if (!dayString) break;
+            if (strstr(dayString, "Sunday") == dayString )
+              sched[i].days |= 1 << 0;
+            if (strstr(dayString, "Monday") == dayString )
+              sched[i].days |= 1 << 1;
+            if (strstr(dayString, "Tuesday") == dayString )
+              sched[i].days |= 1 << 2;
+            if (strstr(dayString, "Wednesday") == dayString )
+              sched[i].days |= 1 << 3;
+            if (strstr(dayString, "Thursday") == dayString )
+              sched[i].days |= 1 << 4;
+            if (strstr(dayString, "Friday") == dayString )
+              sched[i].days |= 1 << 5;
+            if (strstr(dayString, "Saturday") == dayString )
+              sched[i].days |= 1 << 6;
+            if (strstr(dayString, "Even") == dayString )
+              sched[i].days |= 1 << 8;
+            if (strstr(dayString, "Odd") == dayString )
+            sched[i].days |= 1 << 9;
+          }
+          if (sched[i].days == 0) sched[i].days = 0xffff;
+
+          computeNext(&sched[i]);
+
+          #ifdef EXTRA_DEBUG
+          dumpSched("schedlist", &sched[i]);
+          #endif
+          DBG_OUTPUT_PORT.printf("schedule %d loaded next: %s duration %d\n",
+              i, timeStr(sched[i].next + offsetGMT), sched[i].duration);
+        }
+      }
     }
   } else {
     DBG_OUTPUT_PORT.printf("sched file: %s not found\n", schedFile);
@@ -400,6 +562,13 @@ void startMDNS() {
 }
 
 // NTP
+
+void setRtc() {
+  rtc.setDate(day(), weekday() - 1, month(), year() < 2000 ? 1 : 0,
+    year()%100);
+  rtc.setTime(hour(), minute(), second());
+}
+
 bool ntpStarted = false;
 void startNTP() {
     if (timeServer[0] == '\0') return;
@@ -413,23 +582,44 @@ void stopNTP() {
     NTP.stop();
     ntpStarted = false;
 }
+void recalcSched();  // forward ref
 void handleNtpSync(NTPSyncEvent_t event) {
   if (event) {
     DBG_OUTPUT_PORT.printf("NTP Error %d\n", event);
   } else {
     DBG_OUTPUT_PORT.printf("NTP Successfull\n");
+    timer.setTimeout(1000, recalcSched);
+    if (hasRtc && !rtcValid) {
+        timer.setTimeout(1000, setRtc);
+        stopNTP();
+    }
   }
 }
 
-int displayTimeId = -1;
-
-void displayTime() {
-  #ifdef EXTRA_DEBUG
-    DBG_OUTPUT_PORT.printf("now(): %d\n", now());
-  #endif
-  displayStatus(1, "time %s\n",
-    NTP.getTimeDateString(now() > 100000000 ? now()+offsetGMT : 0).c_str());
+const char *timeStr(time_t t) {
+  static char tmbuf[20];
+  if (t < 10000000) {
+    strncpy(tmbuf, "Not Set", sizeof(tmbuf));
+    return tmbuf;
+  }
+  tmElements_t tm;
+  breakTime(t, tm);
+  snprintf(tmbuf, sizeof(tmbuf), "%02d:%02d:%02d %04d/%02d/%02d",
+    tm.Hour, tm.Minute, tm.Second, tm.Year + 1970, tm.Month, tm.Day);
+  return tmbuf;
 }
+
+int tickId = -1;
+void checkSched();  // forward ref
+void tick() {
+  const char *tx = timeStr(now() > 100000000 ? now()+offsetGMT : 0);
+  #ifdef EXTRA_DEBUG
+    DBG_OUTPUT_PORT.printf("now(): %d %s\n", now(), tx);
+  #endif
+  displayStatus(1, "time %s\n", tx);
+  checkSched();
+}
+
 // WIFI STATUS CHANGES
 int apModeTimerId = -1;
 int staModeTimerId = -1;
@@ -636,7 +826,7 @@ void setup(void) {
     setApMode(false);
   }
 
-  setTimedFunc(true, &displayTimeId, 1000, displayTime, "displayTime");
+  setTimedFunc(true, &tickId, 1000, tick, "tick");
 
 // SERVER INIT
   // list directory
@@ -698,9 +888,7 @@ void setup(void) {
     }
     setTime(i);
     if (hasRtc) {
-      rtc.setDate(day(), weekday() - 1, month(), year() < 2000 ? 1 : 0,
-        year()%100);
-      rtc.setTime(hour(), minute(), second());
+      setRtc();
     }
     server.send(200, "text/text", "OK");
     DBG_OUTPUT_PORT.printf("settime %d\n", i);

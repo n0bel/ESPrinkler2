@@ -21,6 +21,66 @@
       JSONEditor.defaults.theme = 'foundation5';
 
       var editor;
+      // Value parameter - required. All other parameters are optional.
+      function isTime (value) {
+        try {
+          var SplitValue = value.split(':');
+          if (SplitValue.length !== 2) return false;
+          var h = parseInt(SplitValue[0], 10);
+          var m = parseInt(SplitValue[1], 10);
+          if (h < 0 || h > 23) return false;
+          if (m < 0 || m > 59) return false;
+        } catch (e) {
+          return false;
+        }
+        return true;
+      }
+      // Value parameter - required. All other parameters are optional.
+      function isDate (value, sepVal, dayIdx, monthIdx, yearIdx) {
+        try {
+          // Change the below values to determine which format of date you wish to check. It is set to dd/mm/yyyy by default.
+          var DayIndex = dayIdx !== undefined ? dayIdx : 0;
+          var MonthIndex = monthIdx !== undefined ? monthIdx : 1;
+          var YearIndex = yearIdx !== undefined ? yearIdx : 2;
+          var SepVal = sepVal !== undefined ? sepVal : '/';
+
+          var SplitValue = value.split(SepVal);
+          var OK = true;
+          if (!(SplitValue[DayIndex].length === 1 || SplitValue[DayIndex].length === 2)) {
+            OK = false;
+          }
+          if (OK && !(SplitValue[MonthIndex].length === 1 || SplitValue[MonthIndex].length === 2)) {
+            OK = false;
+          }
+          if (OK && SplitValue[YearIndex].length !== 4) {
+            OK = false;
+          }
+          if (OK) {
+            var Day = parseInt(SplitValue[DayIndex], 10);
+            var Month = parseInt(SplitValue[MonthIndex], 10);
+            var Year = parseInt(SplitValue[YearIndex], 10);
+            if ((OK = (Year > 1900))) {
+              if ((OK = (Month <= 12) && Month > 0)) {
+                var LeapYear = ((((Year % 4) === 0) && ((Year % 100) !== 0)) || ((Year % 400) === 0));
+                if ((OK = Day) > 0) {
+                  if (Month === 2) {
+                    OK = LeapYear ? Day <= 29 : Day <= 28;
+                  } else {
+                    if ((Month === 4) || (Month === 6) || (Month === 9) || (Month === 11)) {
+                      OK = Day <= 30;
+                    } else {
+                      OK = Day <= 31;
+                    }
+                  }
+                }
+              }
+            }
+          }
+          return OK;
+        } catch (e) {
+          return false;
+        }
+      }
 
       JSONEditor.defaults.custom_validators.push(function (schema, value, path) {
         var errors = [];
@@ -39,6 +99,14 @@
               property: 'format',
               message: schema.title + ': Dates must be in the format "YYYY-MM-DD"'
             });
+          } else {
+            if (value !== '' && !isDate(value, '-', 2, 1, 0)) {
+              errors.push({
+                path: path,
+                property: 'format',
+                message: schema.title + ': Invalid Date"'
+              });
+            }
           }
         }
         if (schema.format === 'time') {
@@ -49,6 +117,14 @@
               property: 'format',
               message: schema.title + ': Times must be in the format HH:MM'
             });
+          } else {
+            if (value !== '' && !isTime(value)) {
+              errors.push({
+                path: path,
+                property: 'format',
+                message: schema.title + ': Invalid Time'
+              });
+            }
           }
         }
         return errors;

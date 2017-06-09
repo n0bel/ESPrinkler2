@@ -86,7 +86,6 @@ function functionMatch (output) {
       }
     }
   });
-  console.log(array);
   return array;
 }
 
@@ -112,22 +111,32 @@ var terminalKill = function () {
   }
 };
 
+var arduinoCompilerCleanup = function (buildOutcome, stdout, stderr) {
+  require('child_process').spawn(
+    'cmd',
+    [ '/C rmdir /S /Q build\\sketch\\build' ],
+    { cwd: this.cwd, env: this.env }
+  );
+  return true;
+};
+
 module.exports = {
   cmd: pathRunArduino,
   args: [ '--verify' ].concat(xargs),
   name: 'compile',
   atomCommandName: 'build:compile',
-  cwd: '{PROJECT_PATH}',
   sh: true,
   preBuild: terminalKill,
   functionMatch: functionMatch,
+  postBuild: arduinoCompilerCleanup,
   targets: {
     upload: {
       atomCommandName: 'build:upload',
       cmd: pathRunArduino,
       args: [ '--upload' ].concat(xargs),
       preBuild: terminalKill,
-      functionMatch: functionMatch
+      functionMatch: functionMatch,
+      postBuild: arduinoCompilerCleanup
     },
     upload_then_terminal: {
       atomCommandName: 'build:upload_then_terminal',
@@ -135,7 +144,10 @@ module.exports = {
       args: [ '--upload' ].concat(xargs),
       functionMatch: functionMatch,
       preBuild: terminalKill,
-      postBuild: terminalStart
+      postBuild: function (buildOutcome, stdout, stderr) {
+        arduinoCompilerCleanup.call(this, buildOutcome, stdout, stderr);
+        terminalStart.call(this, buildOutcome, stdout, stderr);
+      }
     },
     justupload: {
       atomCommandName: 'build:just_upload',
@@ -195,7 +207,7 @@ module.exports = {
     },
     clean: {
       atomCommandName: 'build:clean',
-      cmd: 'del {PROJECT_PATH}\\build /s/q && rmdir {PROJECT_PATH}\\build /s/q'
+      cmd: 'rmdir {PROJECT_PATH}\\build /s/q'
     },
     list_comm_ports: {
       atomCommandName: 'build:list_comm_ports',

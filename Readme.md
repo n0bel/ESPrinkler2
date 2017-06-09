@@ -1,4 +1,4 @@
-# EspFeeder
+# ESPrinkler2
 ### A web server and esp8266 based automated pet feeder controller.
 
 This project uses ESP8266WebServer and SPIFFS to create a web enabled automated pet controller.
