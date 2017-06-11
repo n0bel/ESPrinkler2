@@ -16,7 +16,7 @@
   SimpleTimer https://github.com/jfturcot/SimpleTimer (http://playground.arduino.cc/Code/SimpleTimer)
   NtpClientLib 2.0.5 https://github.com/gmag11/NtpClient
   ArduinoJson 5.6.7 https://github.com/bblanchon/ArduinoJson (https://bblanchon.github.io/ArduinoJson/)
-  U8G2Lib 2.13.5 https://github.com/olikraus/u8g2 
+  U8G2Lib 2.13.5 https://github.com/olikraus/u8g2
   orbitalair-arduino-rtc-pcf8563  https://bitbucket.org/orbitalair/arduino_rtc_pcf8563/downloads/ (https://playground.arduino.cc/Main/RTC-PCF8563)
 
   Don't forget to restart the Arduino IDE after installing these things.
@@ -30,6 +30,22 @@
   Then compile and upload the .ino.
 
   */
+
+// Configurable Options
+
+// Include code for PCF8563 RTC
+#define INCLUDE_PCF8563
+
+// Include code for DS1307 RTC
+#define INCLUDE_DS1307
+
+// Where Do you want to send debug output?
+#define DBG_OUTPUT_PORT Serial
+
+// Uncommment if you'd like even more debug information
+// #define EXTRA_DEBUG
+
+// End of Config
 
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
@@ -47,14 +63,23 @@
 #include <SimpleTimer.h>
 #include <SPI.h>
 #include <Wire.h>
+#ifdef INCLUDE_PCF8563
 #include <Rtc_Pcf8563.h>
+#endif
+#ifdef INCLUDE_DS1307
+#include <RtcDS1307.h>
+#endif
+
+#include "./version.h"
 
 U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 
-Rtc_Pcf8563 rtc;
-
-#define DBG_OUTPUT_PORT Serial
-// #define EXTRA_DEBUG
+#ifdef INCLUDE_PCF8563
+Rtc_Pcf8563 Rtc_Pcf8563;
+#endif
+#ifdef INCLUDE_DS1307
+RtcDS1307<TwoWire> Rtc_Ds1307(Wire);
+#endif
 
 const char* configFile = "/config.json";   // The config file name
 const char* schedFile = "/sched.json";   // The sched file name
@@ -73,10 +98,16 @@ char offsetGMTstring[10] = { "0" };   // String version of it
 int relayState = 0;                   // The current state of the relayState
 
 bool apMode = false;                  // Are we in Acess Point mode?
+#ifdef INCLUDE_PCF8563
+bool hasPcf8563 = false;              // we found a PCF8563
+#endif
+#ifdef INCLUDE_DS1307
+bool hasDs1307 = false;              // we found a PCF8563
+#endif
 bool hasRtc = false;                  // do we have an rtc
 bool rtcValid  = false;               // does it have a valid time
 
-char timeServer[31] = { "0.pool.ntp.org" };   // the NTP timeServer to use
+char timeServer[31] = { "pool.ntp.org" };   // the NTP timeServer to use
 
 #define MAX_SCHED 30
 struct _sched {
@@ -336,7 +367,8 @@ void checkSched() {
       }
       if (sched[i].next > 0 && timeNow >= sched[i].next) {
         if (sched[i].zone == 100) {
-          // reset
+          delay(2000);
+          ESP.restart();
         } else {
           relayState |= (1 << (sched[i].zone - 1));
           setRelays();
@@ -564,9 +596,20 @@ void startMDNS() {
 // NTP
 
 void setRtc() {
-  rtc.setDate(day(), weekday() - 1, month(), year() < 2000 ? 1 : 0,
-    year()%100);
-  rtc.setTime(hour(), minute(), second());
+  #ifdef INCLUDE_PCF8563
+  if (hasPcf8563) {
+    Rtc_Pcf8563.setDate(day(), weekday() - 1, month(), year() < 2000 ? 1 : 0,
+      year()%100);
+    Rtc_Pcf8563.setTime(hour(), minute(), second());
+  }
+  #endif
+  #ifdef INCLUDE_DS1307
+  if (hasDs1307) {
+    RtcDateTime dt = RtcDateTime(
+      year(), month(), day(), hour(), minute(), second());
+    Rtc_Ds1307.SetDateTime(dt);
+  }
+  #endif
 }
 
 bool ntpStarted = false;
@@ -722,12 +765,14 @@ void setup(void) {
   SPI.begin();
   SPI.transfer(relayState);
 
+  delay(500);
   DBG_OUTPUT_PORT.begin(74880);
   DBG_OUTPUT_PORT.setDebugOutput(false);
   #ifdef EXTRA_DEBUG
   DBG_OUTPUT_PORT.setDebugOutput(true);
   #endif
-
+  DBG_OUTPUT_PORT.printf("\n\nESPrinkler2 %s compiled %s %s\n",
+    VERSION, __DATE__, __TIME__);
   u8g2.begin();
   u8g2.setFont(u8g2_font_helvR08_tf);
   u8g2.setFontRefHeightExtendedText();
@@ -771,11 +816,36 @@ void setup(void) {
   }
   #endif
 
+  // DS1307
+  #ifdef INCLUDE_DS1307
+  Wire.beginTransmission(DS1307_ADDRESS);
+  if (Wire.endTransmission() == 0) {
+    hasRtc = true;
+    hasDs1307 = true;
+    DBG_OUTPUT_PORT.printf("RTC DS1307 Found @ %02x\n", DS1307_ADDRESS);
+    displayStatus(0, "RTC found");
+    if (Rtc_Ds1307.GetIsRunning()) {
+      if (Rtc_Ds1307.IsDateTimeValid()) rtcValid = true;
+    }
+    RtcDateTime dt = Rtc_Ds1307.GetDateTime();
+    DBG_OUTPUT_PORT.printf(
+      "RTC DS1307 time is %svalid: %02d:%02d:%02d %04d/%02d/%02d\n",
+      rtcValid ? "" : "not ", dt.Hour(), dt.Minute(), dt.Second(),
+        dt.Year(), dt.Month(), dt.Day());
+    if (rtcValid) {
+      setTime(dt.Hour(), dt.Minute(), dt.Second(),
+        dt.Day(), dt.Month(), dt.Year());
+    }
+  }
+  #endif
+
   // pcf8563
+  #ifdef INCLUDE_PCF8563
   Wire.beginTransmission(RTCC_R>>1);
   if (Wire.endTransmission() == 0) {
     hasRtc = true;
-    DBG_OUTPUT_PORT.printf("RTC 8563 Found @ %02x\n", RTCC_R>>1);
+    hasPcf8563 = true;
+    DBG_OUTPUT_PORT.printf("RTC PCF8563 Found @ %02x\n", RTCC_R>>1);
     displayStatus(0, "RTC found");
     Wire.beginTransmission(RTCC_R>>1);
     Wire.write(RTCC_STAT1_ADDR);
@@ -784,7 +854,7 @@ void setup(void) {
     byte stat1 = Wire.read();
     byte stat2 = Wire.read();
     byte stat3 = Wire.read();
-    DBG_OUTPUT_PORT.printf("RTC 8563 status %02x %02x %02x\n",
+    DBG_OUTPUT_PORT.printf("RTC PCF8563 status %02x %02x %02x\n",
       stat1, stat2, stat3);
     // we'll init the control values 1 and 2
     Wire.beginTransmission(RTCC_R>>1);
@@ -795,17 +865,20 @@ void setup(void) {
 
     if ((stat1  & (1 << 7 | 1 << 5)) == 0) {  // if clock is running
       if ((stat3 & 0x80) == 0) rtcValid = true;
-    } else {
+    }
+    if (!rtcValid) {
       displayStatus(0, "RTC not valid");
     }
-    DBG_OUTPUT_PORT.printf("RTC 8563 time is %svalid: %s %s\n",
-      rtcValid ? "" : "not ", rtc.formatDate(RTCC_DATE_ASIA),
-      rtc.formatTime(RTCC_TIME_HMS));
+    DBG_OUTPUT_PORT.printf("RTC PCF8563 time is %svalid: %s %s\n",
+      rtcValid ? "" : "not ", Rtc_Pcf8563.formatDate(RTCC_DATE_ASIA),
+      Rtc_Pcf8563.formatTime(RTCC_TIME_HMS));
     if (rtcValid) {
-      setTime(rtc.getHour(), rtc.getMinute(), rtc.getSecond(),
-        rtc.getDay(), rtc.getMonth(), 2000 + rtc.getYear());
+      setTime(Rtc_Pcf8563.getHour(), Rtc_Pcf8563.getMinute(),
+       Rtc_Pcf8563.getSecond(), Rtc_Pcf8563.getDay(),
+       Rtc_Pcf8563.getMonth(), 2000 + Rtc_Pcf8563.getYear());
     }
   }
+  #endif
 
   loadSched();
 

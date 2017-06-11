@@ -52,8 +52,14 @@ function arduinoBoardString (b) {
   return s + sp.substring(1);
 }
 
-var xargs = [ '--board', arduinoBoardString(board), '--port',
-  port, '-v', '--pref', 'build.path={PROJECT_PATH}/build', '{FILE_ACTIVE}' ];
+var xargs = [
+  '--board', arduinoBoardString(board),
+  '--port', port,
+  '-v',
+  '--pref', 'build.path={PROJECT_PATH}/build',
+  '--pref', 'compiler.cache_core=true',
+  '{FILE_ACTIVE}'
+];
 
 function functionMatch (output) {
   const error = /^(..[^:]+):(\d+):\s+(\w+):(\s.*)$/;
