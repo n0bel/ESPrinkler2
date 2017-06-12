@@ -13,9 +13,9 @@
 		"ssid":
 		{
 			"title": "Your access point SSID (your router).",
-			"description": "Blank to disable connecting to an access point.",
+			"description": "Blank to disable connecting to an access point. * means connect to the last one used.",
 			"type": "string",
-			"default":"",
+			"default":"*",
 			"propertyOrder": 20
 		},
 		"password":
@@ -46,10 +46,11 @@
 		"offsetGMT":
 		{
 			"title": "Timezone Offset (seconds)",
+			"description": "-1 means no offset is specified.  Defaults to 0 (GMT), or it uses the last one saved in the device.",
 			"type": "integer",
-			"default": 0,
-			"minimum":-86400,
-			"maximum":86400,
+			"default": -1,
+			"minimum":-172800,
+			"maximum":172800,
 			"propertyOrder": 60
 		},
 		"timeServer":

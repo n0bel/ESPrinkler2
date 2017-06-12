@@ -78,6 +78,12 @@
         });
       });
 
+      $('#zclear').click(function () {
+        $.get('/clear', function (data) {
+          getStatus();
+        });
+      });
+
       $('#restart').click(function () {
         $.get('/restart', function (data) {
           alert(data);
@@ -89,9 +95,11 @@
       });
 
       $('#settime').click(function () {
-        $.get('/settime', { time: new Date().getTime() / 1000 | 0 }, function () {
-          getStatus();
-        });
+        $.get('/settime', {
+          time: new Date().getTime() / 1000 | 0,
+          offset: new Date().getTimezoneOffset() * -60 }, function () {
+            getStatus();
+          });
       });
 
       getStatus();
@@ -135,6 +143,11 @@
           </div>
           <div class="row">
             <div class="small-12 columns panel callout  radius ">
+              <div class="row small-up-12 ">
+                <div class="column column-block text-center">
+                  <button id='zclear' class='button'>Clear</button>
+                </div>
+              </div>
               <div class="row small-up-4 ">
                 <div class="column column-block text-center">
                   <button id='zs0' class='button'>Toggle Zone 1</button>

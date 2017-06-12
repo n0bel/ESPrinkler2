@@ -63,6 +63,9 @@
 #include <SimpleTimer.h>
 #include <SPI.h>
 #include <Wire.h>
+#include <EEPROM.h>
+#define EEPROM_SIZE 512
+
 #ifdef INCLUDE_PCF8563
 #include <Rtc_Pcf8563.h>
 #endif
@@ -87,14 +90,18 @@ const char* schedFile = "/sched.json";   // The sched file name
 // Note that these are the default values if no /config.json exists,
 //  or items are missing from it.
 
-char ssid[31] = { "" };               // This is the access point to connect to
+char ssid[31] = { "" };              // This is the access point to connect to
+#define EEPROM_SSID 0                 // where the ssid is kept in EEPROM
 char password[31] = { "" };           // And its password
+#define EEPROM_PASSWORD 32            // where the password is kept in EEPROM
 char host[31] = { "ESPrinkler2" };    // The host name .local (mdns) hostname
+#define EEPROM_HOST 64                // where the host is kept in EEPROM
 char assid[31] = { "" };              // This is the access point to connect to
 char apassword[31] = { "" };          // And its password
 
 int offsetGMT = 0;                    // Local timezone offset in seconds
-char offsetGMTstring[10] = { "0" };   // String version of it
+char offsetGMTstring[10] = { "-1" };  // String version of it
+#define EEPROM_OFFSET_GMT 96          // where the host is kept in EEPROM
 int relayState = 0;                   // The current state of the relayState
 
 bool apMode = false;                  // Are we in Acess Point mode?
@@ -163,7 +170,7 @@ String getContentType(String filename) {
 }
 
 bool handleFileRead(String path) {
-  DBG_OUTPUT_PORT.printf(" handleFileRead: %s %d\n",
+  DBG_OUTPUT_PORT.printf(" handleFileRead: %s freemem=%d\n",
     path.c_str(), ESP.getFreeHeap());
   if (path.endsWith("/")) path += "index.html";
 
@@ -177,6 +184,7 @@ bool handleFileRead(String path) {
     file.close();
     return true;
   }
+  DBG_OUTPUT_PORT.printf("%s not found\n", path.c_str());
   return false;
 }
 
@@ -264,6 +272,7 @@ void handleFileList() {
   server.send(200, "text/json", output);
 }
 
+void eeSave();  // forward ref
 void loadConfig() {
   if (SPIFFS.exists(configFile)) {
     File file = SPIFFS.open(configFile, "r");
@@ -277,15 +286,20 @@ void loadConfig() {
         DBG_OUTPUT_PORT.printf("json parse of configFile failed.\n");
     } else {
       const char *t;
-      t = root["ssid"]; if (t) { strncpy(ssid, t, 30); }
-      t = root["password"]; if (t) { strncpy(password, t, 30); }
+      t = root["ssid"]; if (t && t[0] != '*') {
+        strncpy(ssid, t, 30);
+        t = root["password"]; if (t) { strncpy(password, t, 30); }
+      }
       t = root["assid"]; if (t) { strncpy(assid, t, 30); }
       t = root["apassword"]; if (t) { strncpy(apassword, t, 30); }
       t = root["host"]; if (t) { strncpy(host, t, 30); }
       t = root["timeServer"]; if (t) { strncpy(timeServer, t, 30); }
       t = root["offsetGMT"]; if (t) { strncpy(offsetGMTstring, t, 10); }
-      offsetGMT = atoi(offsetGMTstring);
-
+      int g = atoi(offsetGMTstring);
+      if (g != -1) {
+        offsetGMT = g;
+      }
+      eeSave();
       DBG_OUTPUT_PORT.printf("Config: host: %s ssid: %s assid: %s\n",
         host, ssid, assid);
       DBG_OUTPUT_PORT.printf("  timeServer: %s offsetGMT:%d\n",
@@ -754,6 +768,80 @@ void onSTADisconnected(WiFiEventStationModeDisconnected event_info) {
   timer.setTimeout(20, stopNTP);
 }
 
+
+bool eeIsValid() {
+  uint8_t csum = 0x35;
+  #ifdef EXTRA_DEBUG
+  DBG_OUTPUT_PORT.printf("eeIsValid?");
+  #endif
+  for (int addr = 0; addr < EEPROM_SIZE; addr++) {
+    #ifdef EXTRA_DEBUG
+    DBG_OUTPUT_PORT.printf(" %02x", EEPROM.read(addr));
+    #endif
+    csum += EEPROM.read(addr);
+  }
+  #ifdef EXTRA_DEBUG
+  DBG_OUTPUT_PORT.printf("eeIsValid CSUM=%02x\n", csum);
+  #endif
+  if (csum != 0) return false;
+  return true;
+}
+
+bool eeMakeValid() {
+  uint8_t csum = 0x35;
+  for (int addr = 0; addr < (EEPROM_SIZE-1); addr++) {
+    csum += EEPROM.read(addr);
+  }
+  #ifdef EXTRA_DEBUG
+  DBG_OUTPUT_PORT.printf("eeMakeValid last=%02x\n", 256 - csum);
+  #endif
+  EEPROM.write(EEPROM_SIZE-1, 256 - csum);
+  EEPROM.commit();
+}
+
+
+void eeReadChar(char *data, int addr, int size) {
+  while (size--) {
+    *data = static_cast<char>(EEPROM.read(addr));
+    addr++;
+    data++;
+  }
+}
+
+void eeWriteChar(char *data, int addr, int size) {
+  while (size--) {
+    EEPROM.write(addr, (uint8_t)*data);
+    addr++;
+    data++;
+  }
+}
+
+void eeClear() {
+  for (int addr = 0; addr < (EEPROM_SIZE-1); addr++) {
+    EEPROM.write(addr, 0);
+  }
+  eeMakeValid();
+}
+
+void eeLoad() {
+  eeReadChar(ssid, EEPROM_SSID, sizeof(ssid));
+  eeReadChar(password, EEPROM_PASSWORD, sizeof(password));
+  char t[sizeof(host)];
+  eeReadChar(t, EEPROM_HOST, sizeof(host));
+  if (strlen(t) > 0) strncpy(host, t, sizeof(host));
+  eeReadChar(offsetGMTstring, EEPROM_OFFSET_GMT, sizeof(offsetGMTstring));
+  offsetGMT = atoi(offsetGMTstring);
+}
+
+void eeSave() {
+  eeWriteChar(ssid, EEPROM_SSID, sizeof(ssid));
+  eeWriteChar(password, EEPROM_PASSWORD, sizeof(password));
+  eeWriteChar(host, EEPROM_HOST, sizeof(host));
+  snprintf(offsetGMTstring, sizeof(offsetGMTstring), "%d", offsetGMT);
+  eeWriteChar(offsetGMTstring, EEPROM_OFFSET_GMT, sizeof(offsetGMTstring));
+  eeMakeValid();
+}
+
 void setup(void) {
   pinMode(BUILTIN_LED, OUTPUT);
   setBlinker(50);
@@ -782,6 +870,13 @@ void setup(void) {
   u8g2.clearBuffer();
   displayStatus(0, "Start...");
 
+  EEPROM.begin(EEPROM_SIZE);
+  if (eeIsValid()) {
+    eeLoad();
+  } else {
+    eeClear();
+    eeSave();
+  }
 
   SPIFFS.begin();
   {
@@ -954,15 +1049,30 @@ void setup(void) {
       relayState&(1 << i) ? "on" : "off");
     setRelays();
   });
+
+  server.on("/clear", HTTP_GET, []() {
+    relayState = 0;
+    server.send(200, "text/text", "OK");
+    setRelays();
+  });
+
+  server.on("/clean", HTTP_GET, []() {
+    eeClear();
+    SPIFFS.remove(configFile);
+    SPIFFS.remove(schedFile);
+    server.send(200, "text/text", "Persistant Storage has been cleaned.");
+  });
+
   server.on("/settime", HTTP_GET, []() {
     int i = 0;
-    if (server.args() > 0) {
-      i = atoi(server.arg("time").c_str());
-    }
+    i = atoi(server.arg("time").c_str());
     setTime(i);
+    i = atoi(server.arg("offset").c_str());
+    offsetGMT = i;
     if (hasRtc) {
       setRtc();
     }
+    eeSave();
     server.send(200, "text/text", "OK");
     DBG_OUTPUT_PORT.printf("settime %d\n", i);
     setRelays();
@@ -971,6 +1081,10 @@ void setup(void) {
   server.on("/restart", HTTP_GET, []() {
     server.send(200, "text/text",
       "Restarting.... Wait a minute or so and then refresh.");
+    relayState = 0;
+    setRelays();
+    displayStatus(0, "Restarting.....");
+    displayStatus(1, "");
     delay(2000);
     ESP.restart();
   });

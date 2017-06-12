@@ -121,6 +121,13 @@
           });
         });
 
+        $('.cleanbutton').click(function () {
+          $.get('clean', function (data) {
+            alert(data);
+            getConfig();
+          });
+        });
+
         editor.on('ready', function () {
           $("input[name='root[offsetGMT]']").after("<button id='settz' class='button tiny'>Set Time zone from Browser</button>");
           $('#settz').click(function () {
@@ -156,10 +163,12 @@
           <button class='savebutton button '>Save Configuration</button>
           <button class='loadbutton button '>Load Configuration</button>
           <button class='restartbutton button '>Restart</button>
+          <button class='cleanbutton button '>Clean</button>
           <div id='editor_holder' class="panel callout radius"></div>
           <button class='savebutton button '>Save Configuration</button>
           <button class='loadbutton button '>Load Configuration</button>
           <button class='restartbutton button '>Restart</button>
+          <button class='cleanbutton button '>Clean</button>
       </div>
     </div>
 

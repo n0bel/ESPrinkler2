@@ -58,7 +58,18 @@ class ESPrinkler2RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
                 except:
                     pass
                 ltime = time.time()
+                try:
+                    o = int(query_components['offset'][0])
+                    offsetGMT = o
+                except:
+                    pass
                 self.xsend("ok")
+            elif self.path == '/clear':
+                for i in range(0, 8):
+                    zones[i] = 'off'
+                self.xsend("ok")
+            elif self.path == '/clean':
+                self.xsend("Persistant Storage has been cleaned.")
             elif self.path == '/toggle':
                 i = 0
                 try:
@@ -190,7 +201,9 @@ class ESPrinkler2RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
                                 try:
                                     tt = json.loads(file_data)
                                     host = tt['host']
-                                    offsetGMT = int(tt['offsetGMT'])
+                                    x = int(tt['offsetGMT'])
+                                    if x != -1:
+                                        x = offsetGMT
                                 except:
                                     pass
                                 print('config\n'+file_data)
