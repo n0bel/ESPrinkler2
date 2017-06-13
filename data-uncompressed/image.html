@@ -46,7 +46,7 @@
           var $selected = null;
           var $elements = (opt.handle === '') ? this : this.find(opt.handle);
 
-          $elements.css('cursor', opt.cursor).on('mousedown.drags', function (e) {
+          $elements.css('cursor', opt.cursor).on('touchstart.drags mousedown.drags', function (e) {
             if (opt.handle === '') {
               $selected = $(this);
               $selected.addClass(opt.draggableClass);
@@ -58,12 +58,12 @@
             var drgW = $selected.outerWidth();
             var posY = $selected.offset().top + drgH - e.pageY;
             var posX = $selected.offset().left + drgW - e.pageX;
-            $(document).on('mousemove.drags', function (e) {
+            $(document).on('touchmove.drags mousemove.drags', function (e) {
               $selected.offset({
                 top: e.pageY + posY - drgH,
                 left: e.pageX + posX - drgW
               });
-            }).on('mouseup', function () {
+            }).on('touchend.drags mouseup.drags', function () {
               $(this).off('mousemove.drags'); // Unbind events from document
               if ($selected !== null) {
                 $selected.removeClass(opt.draggableClass);
@@ -71,7 +71,7 @@
               }
             });
             e.preventDefault(); // disable selection
-          }).on('mouseup.drags', function () {
+          }).on('touchend.drags mouseup.drags', function () {
             if (opt.handle === '') {
               $selected.removeClass(opt.draggableClass);
             } else {

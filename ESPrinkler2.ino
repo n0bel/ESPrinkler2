@@ -51,7 +51,7 @@
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
-#include <WiFiUdp.h>
+#include <DNSServer.h>
 #include <TimeLib.h>
 #include <NtpClientLib.h>
 #include <FS.h>
@@ -106,6 +106,7 @@ char offsetGMTstring[10] = { "-1" };  // String version of it
 int relayState = 0;                   // The current state of the relayState
 
 bool apMode = false;                  // Are we in Acess Point mode?
+bool dnsStarted = false;              // Did we start dns?
 #ifdef INCLUDE_PCF8563
 bool hasPcf8563 = false;              // we found a PCF8563
 #endif
@@ -130,10 +131,13 @@ struct _sched {
 } sched[MAX_SCHED] = { 0 };
 
 
+// DNS server
+const byte DNS_PORT = 53;
+DNSServer dnsServer;
+
 ESP8266WebServer server(80);  // The Web Server
 File fsUploadFile;            // holds the current upload when files are
                               // uploaded (see edit.htm)
-WiFiUDP udp;
 SimpleTimer timer;
 
 time_t ms = 0;            // tracking milliseconds
@@ -729,11 +733,19 @@ void setApMode(bool mode) {
       }
       DBG_OUTPUT_PORT.printf("AP mode. IP address: %s\n",
         WiFi.softAPIP().toString().c_str());
+
+      /* Setup the DNS server redirecting all the domains to the apIP */
+      dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
+      dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
+      dnsStarted = true;
+
       #ifdef EXTRA_DEBUG
       WiFi.printDiag(DBG_OUTPUT_PORT);
       #endif
       displayStatus(0, "AP:%s %s", WiFi.softAPIP().toString().c_str(), assid);
     } else {
+      if (dnsStarted) dnsServer.stop();
+      dnsStarted = false;
       DBG_OUTPUT_PORT.printf("going to STA mode %s\n", ssid);
       displayStatus(0, "Try: %s", ssid);
       WiFi.mode(WIFI_STA);
@@ -835,8 +847,10 @@ void eeLoad() {
 }
 
 void eeSave() {
-  eeWriteChar(ssid, EEPROM_SSID, sizeof(ssid));
-  eeWriteChar(password, EEPROM_PASSWORD, sizeof(password));
+  if (ssid[0] != '\0' && ssid[0] != '*') {
+    eeWriteChar(ssid, EEPROM_SSID, sizeof(ssid));
+    eeWriteChar(password, EEPROM_PASSWORD, sizeof(password));
+  }
   eeWriteChar(host, EEPROM_HOST, sizeof(host));
   snprintf(offsetGMTstring, sizeof(offsetGMTstring), "%d", offsetGMT);
   eeWriteChar(offsetGMTstring, EEPROM_OFFSET_GMT, sizeof(offsetGMTstring));
@@ -1101,4 +1115,6 @@ void loop(void) {
   timer.run();
 // deal with http server.
   server.handleClient();
+
+  if (dnsStarted) dnsServer.processNextRequest();
 }
