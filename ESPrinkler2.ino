@@ -86,6 +86,7 @@ RtcDS1307<TwoWire> Rtc_Ds1307(Wire);
 
 const char* configFile = "/config.json";   // The config file name
 const char* schedFile = "/sched.json";   // The sched file name
+const char* buttonsFile = "/buttons.json";   // The buttons file name
 
 // Note that these are the default values if no /config.json exists,
 //  or items are missing from it.
@@ -1060,6 +1061,7 @@ void setup(void) {
     eeClear();
     SPIFFS.remove(configFile);
     SPIFFS.remove(schedFile);
+    SPIFFS.remove(buttonsFile);
     server.send(200, "text/text", "Persistant Storage has been cleaned.");
   });
 

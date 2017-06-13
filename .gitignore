@@ -79,3 +79,6 @@ $RECYCLE.BIN/
 *.lnk
 
 build/*
+data-uncompressed/house1.jpg
+data-uncompressed/house2.jpg
+data-uncompressed/house3.jpg

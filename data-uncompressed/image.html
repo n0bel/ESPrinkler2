@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>ESPrinkler2 Status</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Foundation CSS framework (Bootstrap and jQueryUI also supported) -->
+    <link rel='stylesheet' href='/foundation.min.css'>
+    <script src="/jquery-3.2.1.min.js"></script>
+    <style>
+    .radius { border-radius: 3px; }
+    .button { border-radius: 5px; }
+    .callout { background-color: #ddd; }
+    </style>
+
+    <script>
+      /* global $, jQuery, Blob, FormData */  /* for eslint */
+      // Simple JQuery Draggable Plugin
+      // https://plus.google.com/108949996304093815163/about
+      // Usage: $(selector).drags();
+      // Options:
+      // handle            => your dragging handle.
+      //                      If not defined, then the whole body of the
+      //                      selected element will be draggable
+      // cursor            => define your draggable element cursor type
+      // draggableClass    => define the draggable class
+      // activeHandleClass => define the active handle class
+      //
+      // Update: 26 February 2013
+      // 1. Move the `z-index` manipulation from the plugin to CSS declaration
+      // 2. Fix the laggy effect, because at the first time I made this plugin,
+      //    I just use the `draggable` class that's added to the element
+      //    when the element is clicked to select the current draggable element. (Sorry about my bad English!)
+      // 3. Move the `draggable` and `active-handle` class as a part of the plugin option
+      // Next update?? NEVER!!! Should create a similar plugin that is not called `simple`!
+
+      (function ($) {
+        $.fn.drags = function (opt) {
+          opt = $.extend({
+            handle: '',
+            cursor: 'move',
+            draggableClass: 'draggable',
+            activeHandleClass: 'active-handle'
+          }, opt);
+
+          var $selected = null;
+          var $elements = (opt.handle === '') ? this : this.find(opt.handle);
+
+          $elements.css('cursor', opt.cursor).on('mousedown.drags', function (e) {
+            if (opt.handle === '') {
+              $selected = $(this);
+              $selected.addClass(opt.draggableClass);
+            } else {
+              $selected = $(this).parent();
+              $selected.addClass(opt.draggableClass).find(opt.handle).addClass(opt.activeHandleClass);
+            }
+            var drgH = $selected.outerHeight();
+            var drgW = $selected.outerWidth();
+            var posY = $selected.offset().top + drgH - e.pageY;
+            var posX = $selected.offset().left + drgW - e.pageX;
+            $(document).on('mousemove.drags', function (e) {
+              $selected.offset({
+                top: e.pageY + posY - drgH,
+                left: e.pageX + posX - drgW
+              });
+            }).on('mouseup', function () {
+              $(this).off('mousemove.drags'); // Unbind events from document
+              if ($selected !== null) {
+                $selected.removeClass(opt.draggableClass);
+                $selected = null;
+              }
+            });
+            e.preventDefault(); // disable selection
+          }).on('mouseup.drags', function () {
+            if (opt.handle === '') {
+              $selected.removeClass(opt.draggableClass);
+            } else {
+              $selected.removeClass(opt.draggableClass)
+                .find(opt.handle).removeClass(opt.activeHandleClass);
+            }
+            $selected = null;
+          });
+
+          return this;
+        };
+        $.fn.dragsOff = function () {
+          this.css('cursor', '').off('.drags');
+        };
+      })(jQuery);
+
+      (function ($) {
+        $.fn.getLeftInPercent = function () {
+          var left = (parseFloat($(this).css('left'))) / parseFloat($(this).parent().css('width'));
+          return Math.round(100 * left);
+        };
+        $.fn.getTopInPercent = function () {
+          var top = (parseFloat($(this).css('top'))) / parseFloat($(this).parent().css('height'));
+          return Math.round(100 * top);
+        };
+      })(jQuery);
+
+    </script>
+    <script>
+
+      function getStatus () {
+        $.getJSON('status', function (data) {
+          $('.hostname').text(data.host);
+          document.title = data.host + ' Image';
+          for (var i = 0; i < 8; i++) {
+            let b = $('#zs' + i);
+            if (data['zone' + i] === 'on') {
+              b.removeClass('success');
+              b.addClass('alert');
+            } else {
+              b.removeClass('alert');
+              b.addClass('success');
+            }
+          }
+        });
+      }
+
+      function getButtons () {
+        // console.log('get config');
+        $.getJSON('buttons.json', function (data) {
+          for (var b in data) {
+            if (data.hasOwnProperty(b)) {
+              var i = data[b];
+              $('#' + b).css('top', i.top)
+                .css('left', i.left)
+                .css('position', 'absolute');
+            }
+          }
+        });
+      }
+
+      function saveButtons (data) {
+        var formData = new FormData();
+        formData.append('data', new Blob([data], { type: 'text/json' }), '/buttons.json');
+        $.ajax({
+          url: '/edit',
+          data: formData,
+          processData: false,
+          contentType: false,
+          type: 'POST'
+        }).done(function () {
+        });
+      }
+
+      var moving = false;
+
+      $(function () {
+        $.ajaxSetup({ cache: false });
+
+        $('.zones').click(function () {
+          if (moving) return;
+          let mm = this.id.match(/^zs([\d])/);
+          $.get('/toggle', { zone: mm[1] }, function () {
+            getStatus();
+          });
+        });
+
+        $('#zclear').click(function () {
+          $.get('/clear', function (data) {
+            getStatus();
+          });
+        });
+
+        $('#refresh').click(function () {
+          getStatus();
+        });
+
+        $('#moveer').click(function () {
+          moving = !moving;
+          if (moving) {
+            $(this).addClass('alert').text('Save Buttons');
+            $('.movable').drags();
+          } else {
+            var v = {};
+            $('.zones').each(function () {
+              var t = $(this);
+              var ptop = t.getTopInPercent(); // parseInt((t.offset().top) / t.parent().parent().height() * 100.0);
+              var pleft = t.getLeftInPercent(); // parseInt((t.offset().left) / t.parent().parent().width() * 100.0);
+              v[this.id] = { top: ptop + '%', left: pleft + '%' };
+            });
+            var data = JSON.stringify(v, null, 1);
+            console.log(data);
+            saveButtons(data);
+            // save move data here?
+            $(this).removeClass('alert').text('Move Buttons');
+            $('.movable').dragsOff();
+          }
+        });
+
+        for (var i = 0; i < 8; i++) {
+          $('#zs' + i).css('top', '10%')
+          .css('left', ((i + 1) * 10) + '%')
+          .css('position', 'absolute');
+        }
+
+        getButtons();
+
+        getStatus();
+      });
+
+    </script>
+  </head>
+  <body>
+    <div class="row">
+      <div class="large-12 columns">
+        <div class="panel">
+          <h2><span class="hostname">ESPrinkler2</span> Status</h2>
+        </div>
+      </div>
+    </div>
+    <div class="row" >
+      <div class="medium-3 columns">
+        <a href="/" class='button'>Main</a>
+      </div>
+      <div class="medium-3 columns">
+        <button id='moveer' class='button'>Move Buttons</button>
+      </div>
+      <div class="medium-3 columns">
+        <a href="sched.html" class='button'>Schedules</a>
+      </div>
+    </div>
+    <div class="row">
+      <div class="small-12 columns">
+        <div class="panel">
+          <div class="row">
+            <div class="small-12 columns panel callout radius ">
+                <img src='image.jpg' style='position: relative; width:100%'>
+                  <button id='zs0' class='zones movable tiny button'>1</button>
+                  <button id='zs1' class='zones movable tiny button'>2</button>
+                  <button id='zs2' class='zones movable tiny button'>3</button>
+                  <button id='zs3' class='zones movable tiny button'>4</button>
+                  <button id='zs4' class='zones movable tiny button'>5</button>
+                  <button id='zs5' class='zones movable tiny button'>6</button>
+                  <button id='zs6' class='zones movable tiny button'>7</button>
+                  <button id='zs7' class='zones movable tiny button'>8</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

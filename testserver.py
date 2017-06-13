@@ -25,6 +25,7 @@ ltime = time.time()
 offsetGMT = 0
 config = None
 sched = None
+buttons = None
 host = 'ESPrinkler2'
 
 
@@ -39,7 +40,7 @@ class ESPrinkler2RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             self.wfile.write(content)
 
         def do_GET(self):
-            global zones, htime, ltime, config, sched, host, offsetGMT
+            global zones, htime, ltime, config, sched, host, buttons, offsetGMT
             print self.path
             query_components = parse_qs(urlparse(self.path).query)
             self.path = self.path.split('?', 1)[0]
@@ -69,6 +70,9 @@ class ESPrinkler2RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
                     zones[i] = 'off'
                 self.xsend("ok")
             elif self.path == '/clean':
+                config = None
+                sched = None
+                buttons = None
                 self.xsend("Persistant Storage has been cleaned.")
             elif self.path == '/toggle':
                 i = 0
@@ -108,6 +112,14 @@ class ESPrinkler2RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
                 else:
                     print('sched sending\n'+sched)
                     self.xsend(sched)
+            # buttons.json is not saved, but only temp string storage
+            elif self.path == '/buttons.json':
+                if buttons is None:
+                    self.send_error(404, "File not found")
+                    return None
+                else:
+                    print('buttons sending\n'+buttons)
+                    self.xsend(buttons)
             else:
                 return SimpleHTTPServer.SimpleHTTPRequestHandler.do_GET(self)
 
@@ -165,7 +177,7 @@ class ESPrinkler2RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             self.send_response(404)
 
         def do_POST(self):
-            global config, sched, host, offsetGMT
+            global config, sched, buttons, host, offsetGMT
             self.path = self.path.split('?', 1)[0]
             print self.path
             if self.path == '/edit':
@@ -194,7 +206,8 @@ class ESPrinkler2RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
                             f.close()
                             print 'wrote:'+fn
                             # config and sched are never saved for testing
-                            if fn == 'config.json' or fn == 'sched.json':
+                            if (fn == 'config.json' or fn == 'sched.json'
+                               or fn == 'buttons.json'):
                                 os.remove(fn)
                             if fn == 'config.json':
                                 config = file_data
@@ -210,6 +223,9 @@ class ESPrinkler2RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
                             if fn == 'sched.json':
                                 sched = file_data
                                 print('sched\n'+file_data)
+                            if fn == 'buttons.json':
+                                buttons = file_data
+                                print('buttons\n'+file_data)
                         del file_data
                     else:
                         # Regular form value
