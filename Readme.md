@@ -44,6 +44,7 @@ This project uses Arduino/ESP8266 to create a web based lawn/garden sprinkler co
 
 ### Hardware
 
+*WIP*
 
 ### Software
 Don't forget to restart the Arduino IDE after installing the libraries and boards.
@@ -81,7 +82,7 @@ url: http://ESPrinkler2.local/  If you don't have mDNS available, you must find 
 * Look at the OLED display (if you're using one)
 * Log into your router and look at the dhcp leases (sometimes called dhcp client list)
 find the entry that shows ESP_xxxxxx
-* Connect a serial ttl dongle to the EspFeeder, set the baud rate to 74880.  During startup, you'll see the IP address shown.
+* Connect a serial ttl dongle to the ESPrinkler2, set the baud rate to 74880.  During startup, you'll see the IP address shown.
 * Get mDNS on your computer: here's some info for windows:
 http://stackoverflow.com/questions/23624525/standard-mdns-service-on-windows
-* ping from a computer that does handle mDNS   --  ping espfeeder.local
+* ping from a computer that does handle mDNS   --  ping esprinkler2.local
