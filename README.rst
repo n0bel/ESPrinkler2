@@ -56,6 +56,7 @@ General Instructions
 Hardware
 ~~~~~~~~
 *WIP*
+
 Software
 ~~~~~~~~
 Don't forget to restart the Arduino IDE after installing the libraries
