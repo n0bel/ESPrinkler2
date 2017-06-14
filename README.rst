@@ -19,15 +19,15 @@ Features
 -  8 Zones (relays)
 -  Up to 30 Schedules
 -  NTP Time (or set from browser)
--  RTC Option pcf8563
+-  RTC Option pcf8563 or ds1307
 -  OLED Display Option
+-  ArduinoOTA update
+-  HTTP Server Update
 
 Requirements
 ------------
-
 Hardware
 ~~~~~~~~
-
 -  ESP-12x (nodemcu, hazza, D1 Mini) (probably others)
 -  74HC595
 -  ST1306 OLED
@@ -36,7 +36,6 @@ Hardware
 
 Software
 ~~~~~~~~
-
 -  Arduino-1.8.3
 -  ESP8266/Arduino :Additional Boards Manager URL:
    http://arduino.esp8266.com/stable/package\_esp8266com\_index.json
@@ -56,12 +55,9 @@ General Instructions
 
 Hardware
 ~~~~~~~~
-
 *WIP*
-
 Software
 ~~~~~~~~
-
 Don't forget to restart the Arduino IDE after installing the libraries
 and boards.
 
@@ -76,7 +72,6 @@ Then compile and upload the .ino.
 
 Setup
 ~~~~~
-
 When initially powered on, the internet access point will not be setup.
 The ESPrinkler will therefore switch to AP mode. It will be come an
 access point in itself.
