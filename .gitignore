@@ -82,3 +82,6 @@ build/*
 data-uncompressed/house1.jpg
 data-uncompressed/house2.jpg
 data-uncompressed/house3.jpg
+data/house1.jpg
+data/house2.jpg
+data/house3.jpg

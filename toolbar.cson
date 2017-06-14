@@ -35,6 +35,14 @@
   }
   {
     type: "button"
+    icon: "cloud-upload"
+    callback: "build:upload_ota"
+    tooltip: "Build/Upload OTA"
+    iconset: "fa"
+    show: "Arduino"
+  }
+  {
+    type: "button"
     icon: "files-o"
     callback: "build:spiffs"
     tooltip: "Upload spiffs"

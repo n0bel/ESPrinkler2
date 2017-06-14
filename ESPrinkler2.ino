@@ -51,6 +51,8 @@
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
+#include <ArduinoOTA.h>
+#include <ESP8266HTTPUpdateServer.h>
 #include <DNSServer.h>
 #include <TimeLib.h>
 #include <NtpClientLib.h>
@@ -136,6 +138,7 @@ const byte DNS_PORT = 53;
 DNSServer dnsServer;
 
 ESP8266WebServer server(80);  // The Web Server
+ESP8266HTTPUpdateServer httpUpdater(true);
 File fsUploadFile;            // holds the current upload when files are
                               // uploaded (see edit.htm)
 SimpleTimer timer;
@@ -883,7 +886,10 @@ void setup(void) {
   u8g2.setFontPosTop();
   u8g2.setFontDirection(0);
   u8g2.clearBuffer();
-  displayStatus(0, "Start...");
+  displayStatus(0, "Start %s", VERSION);
+  displayStatus(1, "cmp: %s %s", __DATE__, __TIME__);
+
+  delay(2000);
 
   EEPROM.begin(EEPROM_SIZE);
   if (eeIsValid()) {
@@ -1105,8 +1111,35 @@ void setup(void) {
     ESP.restart();
   });
 
+  httpUpdater.setup(&server, "/update");
   server.begin();
   DBG_OUTPUT_PORT.printf("HTTP server started\n");
+
+  // OTA init
+  ArduinoOTA.onStart([]() {
+    DBG_OUTPUT_PORT.printf("Start\n");
+    displayStatus(1, "OTA Start");
+  });
+  ArduinoOTA.onEnd([]() {
+    DBG_OUTPUT_PORT.printf("\nEnd\n");
+    displayStatus(1, "OTA Start End");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    DBG_OUTPUT_PORT.printf("Progress: %u%%\r\n", (progress / (total / 100)));
+    displayStatus(1, "OTA Progress: %u%%", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    DBG_OUTPUT_PORT.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) DBG_OUTPUT_PORT.printf("Auth Failed\n");
+    else if (error == OTA_BEGIN_ERROR) DBG_OUTPUT_PORT.printf("Begin Failed\n");
+    else if (error == OTA_CONNECT_ERROR)
+      DBG_OUTPUT_PORT.printf("Connect Failed\n");
+    else if (error == OTA_RECEIVE_ERROR)
+      DBG_OUTPUT_PORT.printf("Receive Failed\n");
+    else if (error == OTA_END_ERROR) DBG_OUTPUT_PORT.printf("End Failed\n");
+    displayStatus(1, "OTA Error[%u]", error);
+  });
+  ArduinoOTA.begin();
 }
 
 
@@ -1115,6 +1148,6 @@ void loop(void) {
   timer.run();
 // deal with http server.
   server.handleClient();
-
+  ArduinoOTA.handle();
   if (dnsStarted) dnsServer.processNextRequest();
 }

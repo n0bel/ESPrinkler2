@@ -13,6 +13,7 @@ var pathRunEsptool = pathToArduino + 'portable\\packages\\esp8266\\tools\\esptoo
 var pathRunTerminal = '..\\..\\..\\terminal\\termie.exe';
 var pathRunGzip = '..\\..\\..\\Utility\\gzip.exe';
 var port = 'COM4';
+var otaPort = '172.30.1.79';
 var terminalBaud = '74880';
 var resetMethod = 'nodemcu';
 var terminalProcess = null;
@@ -132,7 +133,7 @@ module.exports = {
   name: 'compile',
   atomCommandName: 'build:compile',
   sh: true,
-  preBuild: terminalKill,
+
   functionMatch: functionMatch,
   postBuild: arduinoCompilerCleanup,
   targets: {
@@ -141,6 +142,13 @@ module.exports = {
       cmd: pathRunArduino,
       args: [ '--upload' ].concat(xargs),
       preBuild: terminalKill,
+      functionMatch: functionMatch,
+      postBuild: arduinoCompilerCleanup
+    },
+    upload_ota: {
+      atomCommandName: 'build:upload_ota',
+      cmd: pathRunArduino,
+      args: [ '--upload' ].concat(xargs).concat([ '--port', otaPort ]),
       functionMatch: functionMatch,
       postBuild: arduinoCompilerCleanup
     },
@@ -190,7 +198,8 @@ module.exports = {
         '-cp', port,
         '-ca', '0x' + spiffs.spiStart.toString(16),
         '-cf', '{PROJECT_PATH}/build/spiffs.bin'
-      ]
+      ],
+      postBuild: terminalStart
     },
     terminal:
     {
