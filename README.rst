@@ -1,10 +1,8 @@
 ESPrinkler2
 ===========
-
 Arduino/ESP8266 based sprinkler Controller.
-
-**NOTICE ALPHA version and Incomplete Documentation**
-
+-------------------------------------------
+**NOTICE: ALPHA version and Incomplete Documentation**
 
 This is a totally rewritten second version of
 https://github.com/n0bel/ESPrinkler Consider that code now totally
@@ -15,7 +13,6 @@ sprinkler controller.
 
 Features
 --------
-
 -  Web server based (ESP8266WebServer)
 -  Responsive UI (desktop/mobile/tablet) written around Jquery,
    Foundation5, and jsoneditor
