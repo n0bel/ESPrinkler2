@@ -52,7 +52,6 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
 #include <ArduinoOTA.h>
-#include <ESP8266HTTPUpdateServer.h>
 #include <DNSServer.h>
 #include <TimeLib.h>
 #include <NtpClientLib.h>
@@ -138,13 +137,11 @@ const byte DNS_PORT = 53;
 DNSServer dnsServer;
 
 ESP8266WebServer server(80);  // The Web Server
-ESP8266HTTPUpdateServer httpUpdater(true);
 File fsUploadFile;            // holds the current upload when files are
                               // uploaded (see edit.htm)
 SimpleTimer timer;
 
-time_t ms = 0;            // tracking milliseconds
-int flagRestart = false;
+int priorPct = -1;
 
 // format bytes
 String formatBytes(size_t bytes) {
@@ -195,6 +192,39 @@ bool handleFileRead(String path) {
   DBG_OUTPUT_PORT.printf("%s not found\n", path.c_str());
   return false;
 }
+
+void handleFileUpdate() {
+  if (server.uri() != "/update") return;
+  HTTPUpload& update = server.upload();
+  if (update.status == UPLOAD_FILE_START) {
+    String filename = update.filename;
+    DBG_OUTPUT_PORT.printf("handleFileUpdate Name: %s\n", filename.c_str());
+    uint32_t maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
+    if (!Update.begin(maxSketchSpace)) {
+      Update.printError(DBG_OUTPUT_PORT);
+    }
+  } else if (update.status == UPLOAD_FILE_WRITE) {
+    if ((update.totalSize - priorPct) > 20000) {
+      priorPct = update.totalSize;
+      DBG_OUTPUT_PORT.printf("Update: %u\n", update.totalSize);
+      displayStatus(1, "HTTP Update %u", update.totalSize);
+    }
+    if (Update.write(update.buf, update.currentSize) != update.currentSize) {
+      Update.printError(DBG_OUTPUT_PORT);
+    }
+  } else if (update.status == UPLOAD_FILE_END) {
+    if (Update.end(true)) {
+      DBG_OUTPUT_PORT.printf("Update Success: %u\nRebooting...\n",
+        update.totalSize);
+    } else {
+      Update.printError(DBG_OUTPUT_PORT);
+    }
+  } else if (update.status == UPLOAD_FILE_ABORTED) {
+    Update.end();
+    DBG_OUTPUT_PORT.printf("Update aborted.\n");
+  }
+}
+
 
 void handleFileUpload() {
   if (server.uri() != "/edit") return;
@@ -336,6 +366,10 @@ void dumpSched(const char *m, struct _sched *s) {
     DBG_OUTPUT_PORT.printf(" stop:%s\n", timeStr(s->stop+offsetGMT));
 }
 #endif
+
+void doRestart() {
+  ESP.restart();
+}
 
 void computeNext(struct _sched *s) {
   if (now() < 10000000) {
@@ -1037,6 +1071,16 @@ void setup(void) {
     []() { server.send(200, "text/plain", ""); },
     handleFileUpload);
 
+  server.on("/update", HTTP_POST,
+    []() {
+      server.sendHeader("Location",
+        String(Update.hasError() ? "/updatefailed.html" :
+          "/updatesuccessful.html"), true);
+      server.send(301, "text/html", "");
+      timer.setTimeout(5000, doRestart);
+    },
+    handleFileUpdate);
+
   // called when the url is not defined here
   // use it to load content from SPIFFS
   server.onNotFound([]() {
@@ -1107,26 +1151,27 @@ void setup(void) {
     setRelays();
     displayStatus(0, "Restarting.....");
     displayStatus(1, "");
-    delay(2000);
-    ESP.restart();
+    timer.setTimeout(5000, doRestart);
   });
 
-  httpUpdater.setup(&server, "/update");
   server.begin();
   DBG_OUTPUT_PORT.printf("HTTP server started\n");
 
   // OTA init
   ArduinoOTA.onStart([]() {
     DBG_OUTPUT_PORT.printf("Start\n");
-    displayStatus(1, "OTA Start");
+    displayStatus(1, "OTA Update Start.");
   });
   ArduinoOTA.onEnd([]() {
     DBG_OUTPUT_PORT.printf("\nEnd\n");
-    displayStatus(1, "OTA Start End");
+    displayStatus(1, "OTA done.");
   });
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    DBG_OUTPUT_PORT.printf("Progress: %u%%\r\n", (progress / (total / 100)));
-    displayStatus(1, "OTA Progress: %u%%", (progress / (total / 100)));
+    int p = progress / (total / 100);
+    if (p == priorPct) return;
+    priorPct = p;
+    DBG_OUTPUT_PORT.printf("OTA Update: %u%%\r\n", p);
+    displayStatus(1, "OTA Update: %u%%", p);
   });
   ArduinoOTA.onError([](ota_error_t error) {
     DBG_OUTPUT_PORT.printf("Error[%u]: ", error);

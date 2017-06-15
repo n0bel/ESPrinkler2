@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>ESPrinkler2 Software Update</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Foundation CSS framework (Bootstrap and jQueryUI also supported) -->
+    <link rel='stylesheet' href='/foundation.min.css'>
+    <script src="/jquery-3.2.1.min.js"></script>
+    <style>
+      .radius { border-radius: 3px; }
+      .button { border-radius: 5px; }
+      .callout { background-color: #ddd; }
+      .show-for-sr {
+        position: absolute !important;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+      }
+      .hidden { display: none; }
+    </style>
+  <script>
+    /* global $, alert */  /* for eslint */
+
+    function getStatus () {
+      $.getJSON('status', function (data) {
+        $('.hostname').text(data.host);
+        document.title = data.host + ' Update';
+      });
+    }
+
+    $(function () {
+      $.ajaxSetup({ cache: false });
+
+      $('#restart').click(function () {
+        $.get('/restart', function (data) {
+          alert(data);
+        });
+      });
+
+      $('#update').change(function () {
+        var v = $('#update').val();
+        v = v.replace(/.*[\\/]/, '');
+        $('#updatelabel').text(v);
+        $('#updatesubmit').removeClass('hidden');
+      });
+      getStatus();
+
+    //
+    });
+
+  </script>
+  </head>
+  <body>
+    <div class="row">
+      <div class="large-12 columns">
+        <div class="panel">
+          <h2><span class="hostname">ESPrinkler2</span> Software Update</h2>
+        </div>
+      </div>
+    </div>
+    <div class="row" >
+      <div class="large-2 columns">
+        <a href="index.html" class='button'>Main</a>
+      </div>
+      <div class="large-2 columns">
+        <button id='restart' class='button'>Restart</button>
+      </div>
+    </div>
+    <div class="row">
+      <div class="small-12 columns">
+        <div class="panel">
+          <h3>Software Update</h3>
+          <div class="row">
+            <div class="small-12 columns panel callout radius">
+              <div class="row">
+                <form method='POST' action='/update' enctype='multipart/form-data'>
+                  <label id='updatelabel' for='update' class='button'>Choose File</label>
+                  <input id='update' class='show-for-sr' type='file' name='update'>
+                  <input id='updatesubmit' class='button hidden' type='submit' name='update' value="Upload!">
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

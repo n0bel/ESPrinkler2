@@ -232,6 +232,36 @@ class ESPrinkler2RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
                         print('%s=%s' % (field, form[field].value))
 
                 self.xsend("<html><body>ok</body></html>")
+
+            if self.path == '/update':
+
+                form = cgi.FieldStorage(
+                    fp=self.rfile,
+                    headers=self.headers,
+                    environ={'REQUEST_METHOD': 'POST',
+                             'CONTENT_TYPE': self.headers['Content-Type'],
+                             })
+
+                for field in form.keys():
+                    fields = form[field]
+                    print(fields)
+                    for field_item in fields:
+                        if field_item.filename:
+                            # The field contains an uploaded file
+                            file_data = field_item.file.read()
+                            file_len = len(file_data)
+                            print('Uploaded update %s as "%s" (%d bytes)' %
+                                  (field, field_item.filename, file_len))
+                            # not saving this the update file
+                        else:
+                            # Regular form value
+                            print('%s=%s' % (field_item.name,
+                                  field_item.value))
+
+                self.send_response(301)
+                self.send_header('Location', '/updatesuccessful.html')
+                self.end_headers()
+
             else:
                 return SimpleHTTPServer.SimpleHTTPRequestHandler.do_GET(self)
 

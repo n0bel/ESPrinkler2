@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>ESPrinkler2 Software Update FAILED</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Foundation CSS framework (Bootstrap and jQueryUI also supported) -->
+    <link rel='stylesheet' href='/foundation.min.css'>
+    <script src="/jquery-3.2.1.min.js"></script>
+    <style>
+    .radius { border-radius: 3px; }
+    .button { border-radius: 5px; }
+    .callout { background-color: #ddd; }
+    </style>
+    <script>
+    /* global $ */  /* for eslint */
+    var xtime = 30;
+    $(function () {
+      $.ajaxSetup({ cache: false });
+      window.setInterval(function () {
+        xtime--;
+        if (xtime < 0) {
+          window.location.href = '/';
+          return;
+        }
+        $('#timer').text(xtime);
+      }, 1000);
+    });
+    </script>
+  </head>
+  <body>
+    <div class="row">
+      <div class="large-12 columns">
+        <div class="panel">
+          <h2><span class="hostname">ESPrinkler2</span> Software Update FAILED</h2>
+          <label class='button'>Rebooting... Refreshing to Main page in <span id=timer>30</span> seconds.</label>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
