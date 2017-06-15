@@ -6,8 +6,9 @@
 		"host":
 		{
 			"title": "Host Name",
+			"description": "'*' for a generated unique hostname.",
 			"type": "string",
-			"default":"ESPrinkler2",
+			"default":"*",
 			"propertyOrder": 10
 		},
 		"ssid":

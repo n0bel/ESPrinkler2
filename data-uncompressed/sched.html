@@ -130,13 +130,16 @@
         return errors;
       });
 
-      function getSched () {
-        // console.log('get sched');
-        $.getJSON('sched.json', function (data) {
+      function getStatus () {
+        $.getJSON('status', function (data) {
           $('.hostname').text(data.host);
-          document.title = data.host + ' Configuration';
+          document.title = data.host + ' Schedules';
+        });
+      }
+
+      function getSched () {
+        $.getJSON('sched.json', function (data) {
           editor.setValue(data);
-          // console.log(JSON.stringify(data));
         });
       }
       function saveSched (data) {
@@ -192,6 +195,7 @@
             d.offsetGMT = offset;
             editor.setValue(d);
           });
+          getStatus();
           getSched();
         });
       });

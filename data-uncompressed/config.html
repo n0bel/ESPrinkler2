@@ -52,17 +52,19 @@
         return errors;
       });
 
+      function getStatus () {
+        $.getJSON('status', function (data) {
+          $('.hostname').text(data.host);
+          document.title = data.host + ' Schedules';
+        });
+      }
       function getConfig () {
         // console.log('get config');
         $.getJSON('config.json', function (data) {
           editor.setValue(data);
           // console.log(JSON.stringify(data));
-          $('.hostname').text(data.host);
-          document.title = data.host + ' Configuration';
         }).fail(function () {
-          var data = editor.getValue();
-          $('.hostname').text(data.host);
-          document.title = data.host + ' Configuration';
+          editor.getValue();
         });
       }
       function saveConfig (data) {
@@ -136,6 +138,7 @@
             d.offsetGMT = offset;
             editor.setValue(d);
           });
+          getStatus();
           getConfig();
         });
       });

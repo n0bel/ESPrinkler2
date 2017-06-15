@@ -96,7 +96,7 @@ char ssid[31] = { "" };              // This is the access point to connect to
 #define EEPROM_SSID 0                 // where the ssid is kept in EEPROM
 char password[31] = { "" };           // And its password
 #define EEPROM_PASSWORD 32            // where the password is kept in EEPROM
-char host[31] = { "ESPrinkler2" };    // The host name .local (mdns) hostname
+char host[31] = { "*" };               // The host name .local (mdns) hostname
 #define EEPROM_HOST 64                // where the host is kept in EEPROM
 char assid[31] = { "" };              // This is the access point to connect to
 char apassword[31] = { "" };          // And its password
@@ -357,6 +357,8 @@ void loadConfig() {
       if (g != -1) {
         offsetGMT = g;
       }
+      setHostName();
+      displayStatus(2, host);
       eeSave();
       DBG_OUTPUT_PORT.printf("Config: host: %s ssid: %s assid: %s\n",
         host, ssid, assid);
@@ -667,6 +669,7 @@ void startMDNS() {
   DBG_OUTPUT_PORT.printf("MDNS Starting\nOpen http://%s.local or http://%s/\n",
     host, apMode ? WiFi.softAPIP().toString().c_str() :
                    WiFi.localIP().toString().c_str());
+  displayStatus(2, host);
 }
 
 // NTP
@@ -764,6 +767,16 @@ void tick() {
 }
 
 // WIFI STATUS CHANGES
+
+void setHostName() {
+  if (host[0] == '*' && host[1] == '\0') {
+    uint8_t mac[6];
+    WiFi.softAPmacAddress(mac);
+    snprintf(host, sizeof(host), "ESPrinkler2_%02x%02x%02x",
+      mac[3], mac[4], mac[5]);
+  }
+}
+
 int apModeTimerId = -1;
 int staModeTimerId = -1;
 #define setApModeTimeout(t) \
@@ -923,6 +936,8 @@ void eeLoad() {
   char t[sizeof(host)];
   eeReadChar(t, EEPROM_HOST, sizeof(host));
   if (strlen(t) > 0) strncpy(host, t, sizeof(host));
+  setHostName();
+  displayStatus(2, host);
   eeReadChar(offsetGMTstring, EEPROM_OFFSET_GMT, sizeof(offsetGMTstring));
   offsetGMT = atoi(offsetGMTstring);
 }
@@ -966,6 +981,8 @@ void setup(void) {
   u8g2.clearBuffer();
   displayStatus(0, "Start %s", VERSION);
   displayStatus(1, "cmp: %s %s", __DATE__, __TIME__);
+  setHostName();
+  displayStatus(2, host);
 
   delay(2000);
 
