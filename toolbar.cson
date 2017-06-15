@@ -43,7 +43,7 @@
   }
   {
     type: "button"
-    icon: "files-o"
+    icon: "upload"
     callback: "build:spiffs"
     tooltip: "Upload spiffs"
     iconset: "fa"

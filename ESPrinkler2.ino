@@ -116,6 +116,8 @@ bool hasDs1307 = false;              // we found a PCF8563
 #endif
 bool hasRtc = false;                  // do we have an rtc
 bool rtcValid  = false;               // does it have a valid time
+time_t bootTime = 0;
+String bootTimeString;
 
 char timeServer[31] = { "pool.ntp.org" };   // the NTP timeServer to use
 
@@ -175,16 +177,29 @@ String getContentType(String filename) {
 }
 
 bool handleFileRead(String path) {
-  DBG_OUTPUT_PORT.printf(" handleFileRead: %s freemem=%d\n",
-    path.c_str(), ESP.getFreeHeap());
+  DBG_OUTPUT_PORT.printf(" handleFileRead: %s\n",
+    path.c_str());
+  displayStatus(2, "served %s", path.c_str());
   if (path.endsWith("/")) path += "index.html";
-
+  String ims = server.header("If-Modified-Since");
   String contentType = getContentType(path);
   String pathWithGz = path + ".gz";
   if (SPIFFS.exists(pathWithGz) || SPIFFS.exists(path)) {
+    if (bootTimeString != "" && bootTimeString == ims) {
+      server.send(304, contentType, "Not Modified");
+      return true;
+    }
     if (SPIFFS.exists(pathWithGz))
       path += ".gz";
     File file = SPIFFS.open(path, "r");
+    if (path.indexOf(".json") < 0 || path.indexOf("-schema.json") > -1) {
+        server.sendHeader("Cache-Control", "public, max-age=3600");
+        if (bootTime > 0) {
+          server.sendHeader("Last-Modified", bootTimeString);
+        }
+    } else {
+      server.sendHeader("Cache-Control", "public, max-age=0");
+    }
     size_t sent = server.streamFile(file, contentType);
     file.close();
     return true;
@@ -232,6 +247,7 @@ void handleFileUpload() {
   if (upload.status == UPLOAD_FILE_START) {
     String filename = upload.filename;
     if (!filename.startsWith("/")) filename = "/"+filename;
+    displayStatus(2, "upload %s", filename.c_str());
     DBG_OUTPUT_PORT.printf("handleFileUpload Name: %s\n", filename.c_str());
     fsUploadFile = SPIFFS.open(filename, "w");
     filename = String();
@@ -256,6 +272,7 @@ void handleFileDelete() {
   if (server.args() == 0) return server.send(500, "text/plain", "BAD ARGS");
   String path = server.arg(0);
   DBG_OUTPUT_PORT.printf("handleFileDelete: %s\n", path.c_str());
+  displayStatus(2, "deleted %s", path.c_str());
   if (path == "/")
     return server.send(500, "text/plain", "BAD PATH");
   if (!SPIFFS.exists(path))
@@ -270,6 +287,7 @@ void handleFileCreate() {
     return server.send(500, "text/plain", "BAD ARGS");
   String path = server.arg(0);
   DBG_OUTPUT_PORT.printf("handleFileCreate: %s\n", path.c_str());
+  displayStatus(2, "created %s", path.c_str());
   if (path == "/")
     return server.send(500, "text/plain", "BAD PATH");
   if (SPIFFS.exists(path))
@@ -290,6 +308,7 @@ void handleFileList() {
 
   String path = server.arg("dir");
   DBG_OUTPUT_PORT.printf(" handleFileList: %s\n", path.c_str());
+  displayStatus(2, "list %s", path.c_str());
   Dir dir = SPIFFS.openDir(path);
   path = String();
 
@@ -307,6 +326,7 @@ void handleFileList() {
   }
 
   output += "]";
+  server.sendHeader("Cache-Control", "public, max-age=0");
   server.send(200, "text/json", output);
 }
 
@@ -708,6 +728,24 @@ const char *timeStr(time_t t) {
   return tmbuf;
 }
 
+const char *timeStrStd(time_t t) {
+  static char tmbuf[40];
+  static char *wdays[7] = {
+    "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
+  };
+  static char *mons[12] = {
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  };
+  tmElements_t tm;
+  breakTime(t, tm);
+  snprintf(tmbuf, sizeof(tmbuf), "%s, %02d %s %04d %02d:%02d:%02d GMT",
+    wdays[tm.Wday - 1], tm.Day, mons[tm.Month - 1], tm.Year + 1970,
+    tm.Hour, tm.Minute, tm.Second);
+  return tmbuf;
+}
+
+
 int tickId = -1;
 void checkSched();  // forward ref
 void tick() {
@@ -716,6 +754,12 @@ void tick() {
     DBG_OUTPUT_PORT.printf("now(): %d %s\n", now(), tx);
   #endif
   displayStatus(1, "time %s\n", tx);
+  if (bootTime == 0 && now() > 100000000) {
+    bootTime = now();
+    bootTimeString = String(timeStrStd(bootTime));
+    DBG_OUTPUT_PORT.printf("boot time: %s\n", bootTimeString.c_str());
+  }
+
   checkSched();
 }
 
@@ -1081,14 +1125,9 @@ void setup(void) {
     },
     handleFileUpdate);
 
-  // called when the url is not defined here
-  // use it to load content from SPIFFS
-  server.onNotFound([]() {
-    if (!handleFileRead(server.uri()))
-      server.send(404, "text/plain", "FileNotFound");
-  });
 
   server.on("/status", HTTP_GET, []() {
+    displayStatus(2, "%s", server.uri().c_str());
     String json = "{";
     for (int i = 0; i < 8; i++) {
       json += String("\"zone") +
@@ -1099,16 +1138,19 @@ void setup(void) {
     json += String("\"offsetGMT\":")+String(offsetGMT)+",";
     json += String("\"host\":\"")+String(host)+"\"";
     json += "}";
+    server.sendHeader("Cache-Control", "public, max-age=0");
     server.send(200, "text/json", json);
     DBG_OUTPUT_PORT.printf("status %s\n", json.c_str());
     json = String();
   });
 
   server.on("/toggle", HTTP_GET, []() {
+    displayStatus(2, "%s", server.uri().c_str());
     int i = 0;
     if (server.args() > 0)
       i = atoi(server.arg("zone").c_str());
     relayState ^= (1 << i);
+    server.sendHeader("Cache-Control", "public, max-age=0");
     server.send(200, "text/text", "OK");
     DBG_OUTPUT_PORT.printf("toggle %d = %s\n", i,
       relayState&(1 << i) ? "on" : "off");
@@ -1116,20 +1158,25 @@ void setup(void) {
   });
 
   server.on("/clear", HTTP_GET, []() {
+    displayStatus(2, "%s", server.uri().c_str());
     relayState = 0;
+    server.sendHeader("Cache-Control", "public, max-age=0");
     server.send(200, "text/text", "OK");
     setRelays();
   });
 
   server.on("/clean", HTTP_GET, []() {
+    displayStatus(2, "%s", server.uri().c_str());
     eeClear();
     SPIFFS.remove(configFile);
     SPIFFS.remove(schedFile);
     SPIFFS.remove(buttonsFile);
+    server.sendHeader("Cache-Control", "public, max-age=0");
     server.send(200, "text/text", "Persistant Storage has been cleaned.");
   });
 
   server.on("/settime", HTTP_GET, []() {
+    displayStatus(2, "%s", server.uri().c_str());
     int i = 0;
     i = atoi(server.arg("time").c_str());
     setTime(i);
@@ -1139,12 +1186,15 @@ void setup(void) {
       setRtc();
     }
     eeSave();
+    server.sendHeader("Cache-Control", "public, max-age=0");
     server.send(200, "text/text", "OK");
     DBG_OUTPUT_PORT.printf("settime %d\n", i);
     setRelays();
   });
 
   server.on("/restart", HTTP_GET, []() {
+    displayStatus(2, "%s", server.uri().c_str());
+    server.sendHeader("Cache-Control", "public, max-age=0");
     server.send(200, "text/text",
       "Restarting.... Wait a minute or so and then refresh.");
     relayState = 0;
@@ -1154,21 +1204,33 @@ void setup(void) {
     timer.setTimeout(5000, doRestart);
   });
 
+  // called when the url is not defined here
+  // use it to load content from SPIFFS
+  server.onNotFound([]() {
+    if (!handleFileRead(server.uri())) {
+      displayStatus(2, "not found %s", server.uri().c_str());
+      server.send(404, "text/plain", "FileNotFound");
+    }
+  });
+
+  const char * headerkeys[] = {"If-Modified-Since"};
+  server.collectHeaders(headerkeys, 1);
   server.begin();
   DBG_OUTPUT_PORT.printf("HTTP server started\n");
 
   // OTA init
   ArduinoOTA.onStart([]() {
+    priorPct = 0;
     DBG_OUTPUT_PORT.printf("Start\n");
     displayStatus(1, "OTA Update Start.");
   });
   ArduinoOTA.onEnd([]() {
-    DBG_OUTPUT_PORT.printf("\nEnd\n");
+    DBG_OUTPUT_PORT.printf("End\n");
     displayStatus(1, "OTA done.");
   });
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
     int p = progress / (total / 100);
-    if (p == priorPct) return;
+    if ((p - priorPct) < 5) return;
     priorPct = p;
     DBG_OUTPUT_PORT.printf("OTA Update: %u%%\r\n", p);
     displayStatus(1, "OTA Update: %u%%", p);

@@ -130,16 +130,11 @@
         return errors;
       });
 
-      function getConfig () {
-        $.getJSON('config.json', function (data) {
-          $('.hostname').text(data.host);
-          document.title = data.host + ' Configuration';
-        });
-      }
-
       function getSched () {
         // console.log('get sched');
         $.getJSON('sched.json', function (data) {
+          $('.hostname').text(data.host);
+          document.title = data.host + ' Configuration';
           editor.setValue(data);
           // console.log(JSON.stringify(data));
         });
@@ -197,7 +192,6 @@
             d.offsetGMT = offset;
             editor.setValue(d);
           });
-          getConfig();
           getSched();
         });
       });
@@ -216,9 +210,6 @@
     <div class="row">
       <div class="small-2 columns">
         <a href="/" class='button'>Main Page</a>
-      </div>
-      <div class="small-2 columns">
-        <a href="/edit.html" class='button'>FS Editor</a>
       </div>
     </div>
     <div class='row'>
