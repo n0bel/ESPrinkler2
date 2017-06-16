@@ -680,6 +680,7 @@ void setRtc() {
     Rtc_Pcf8563.setDate(day(), weekday() - 1, month(), year() < 2000 ? 1 : 0,
       year()%100);
     Rtc_Pcf8563.setTime(hour(), minute(), second());
+    DBG_OUTPUT_PORT.printf("Setting PCF8563 time.\n");
   }
   #endif
   #ifdef INCLUDE_DS1307
@@ -687,6 +688,7 @@ void setRtc() {
     RtcDateTime dt = RtcDateTime(
       year(), month(), day(), hour(), minute(), second());
     Rtc_Ds1307.SetDateTime(dt);
+    DBG_OUTPUT_PORT.printf("Setting DS1307 time.\n");
   }
   #endif
 }
@@ -815,9 +817,7 @@ void setApMode(bool mode) {
       WiFi.softAPmacAddress(mac);
       delay(500);
       if (assid[0] == '\0') {
-        // making a nice unique SSID
-        snprintf(assid, sizeof(host), "%s_%02x%02x%02x",
-          host, mac[3], mac[4], mac[5]);
+        strncpy(assid, host, sizeof(assid));
       }
       DBG_OUTPUT_PORT.printf("SoftAP ssid:%s\n", assid);
       if (strlen(apassword) >= 8) {  // softAP doesn't work if password < 8
@@ -1037,6 +1037,10 @@ void setup(void) {
     displayStatus(0, "RTC found");
     if (Rtc_Ds1307.GetIsRunning()) {
       if (Rtc_Ds1307.IsDateTimeValid()) rtcValid = true;
+    } else {
+      DBG_OUTPUT_PORT.printf("RTC DS1307 is not running.\n");
+      Rtc_Ds1307.SetIsRunning(true);
+      DBG_OUTPUT_PORT.printf("Set RTC DS1307 to running.\n");
     }
     RtcDateTime dt = Rtc_Ds1307.GetDateTime();
     DBG_OUTPUT_PORT.printf(
@@ -1217,7 +1221,7 @@ void setup(void) {
     relayState = 0;
     setRelays();
     displayStatus(0, "Restarting.....");
-    displayStatus(1, "");
+    DBG_OUTPUT_PORT.printf("Restart in 5 seconds.\n");
     timer.setTimeout(5000, doRestart);
   });
 
@@ -1238,11 +1242,11 @@ void setup(void) {
   // OTA init
   ArduinoOTA.onStart([]() {
     priorPct = 0;
-    DBG_OUTPUT_PORT.printf("Start\n");
+    DBG_OUTPUT_PORT.printf("OTA Start\n");
     displayStatus(1, "OTA Update Start.");
   });
   ArduinoOTA.onEnd([]() {
-    DBG_OUTPUT_PORT.printf("End\n");
+    DBG_OUTPUT_PORT.printf("OTA End\n");
     displayStatus(1, "OTA done.");
   });
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {

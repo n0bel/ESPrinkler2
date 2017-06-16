@@ -188,6 +188,9 @@
         var redoButton = document.createElement("button");
         redoButton.innerHTML = 'Redo';
         document.getElementById(element).appendChild(redoButton);
+        var mainButton = document.createElement("button");
+        mainButton.innerHTML = 'Main';
+        document.getElementById(element).appendChild(mainButton);
 
         function httpPostProcessRequest(){
           if (xmlHttp.readyState == 4){
@@ -214,6 +217,9 @@
         };
         redoButton.onclick = function (e) {
             editor.getSession().getUndoManager().redo(false);
+        };
+        mainButton.onclick = function (e) {
+            window.location.href = '/';
         };
         mkfile.onclick = function(e){
           if(path.value.indexOf(".") === -1) return;

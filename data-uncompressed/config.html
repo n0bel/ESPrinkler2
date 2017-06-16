@@ -55,7 +55,7 @@
       function getStatus () {
         $.getJSON('status', function (data) {
           $('.hostname').text(data.host);
-          document.title = data.host + ' Schedules';
+          document.title = data.host + ' Configuration';
         });
       }
       function getConfig () {
@@ -64,7 +64,7 @@
           editor.setValue(data);
           // console.log(JSON.stringify(data));
         }).fail(function () {
-          editor.getValue();
+          editor.setValue({});
         });
       }
       function saveConfig (data) {
