@@ -214,6 +214,7 @@ void handleFileUpdate() {
   if (update.status == UPLOAD_FILE_START) {
     String filename = update.filename;
     fullSize = atoi(server.header("Content-Length").c_str());
+    priorPct = 0;
     DBG_OUTPUT_PORT.printf("handleFileUpdate Name: %s %d\n",
       filename.c_str(), fullSize);
     displayStatus(1, "HTTP Update start");
