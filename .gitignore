@@ -85,6 +85,7 @@ data-uncompressed/house3.jpg
 data/house1.jpg
 data/house2.jpg
 data/house3.jpg
+local/*
 toolbar.cson
 .atom-build.js
 .atom-build.js
