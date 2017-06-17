@@ -45,6 +45,12 @@
         $('#updatelabel').text(v);
         $('#updatesubmit').removeClass('hidden');
       });
+      $('#supdate').change(function () {
+        var v = $('#supdate').val();
+        v = v.replace(/.*[\\/]/, '');
+        $('#supdatelabel').text(v);
+        $('#supdatesubmit').removeClass('hidden');
+      });
       getStatus();
 
     //
@@ -79,6 +85,24 @@
                   <label id='updatelabel' for='update' class='button'>Choose File</label>
                   <input id='update' class='show-for-sr' type='file' name='update'>
                   <input id='updatesubmit' class='button hidden' type='submit' name='update' value="Upload!">
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="small-12 columns">
+        <div class="panel">
+          <h3>SPIFFS Update</h3>
+          <div class="row">
+            <div class="small-12 columns panel callout radius">
+              <div class="row">
+                <form method='POST' action='/spiffsupdate' enctype='multipart/form-data'>
+                  <label id='supdatelabel' for='supdate' class='button'>Choose File</label>
+                  <input id='supdate' class='show-for-sr' type='file' name='supdate'>
+                  <input id='supdatesubmit' class='button hidden' type='submit' name='supdate' value="Upload!">
                 </form>
               </div>
             </div>

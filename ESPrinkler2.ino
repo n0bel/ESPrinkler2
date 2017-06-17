@@ -144,6 +144,7 @@ File fsUploadFile;            // holds the current upload when files are
 SimpleTimer timer;
 
 int priorPct = -1;
+int fullSize = -1;
 
 // format bytes
 String formatBytes(size_t bytes) {
@@ -209,37 +210,56 @@ bool handleFileRead(String path) {
 }
 
 void handleFileUpdate() {
-  if (server.uri() != "/update") return;
   HTTPUpload& update = server.upload();
   if (update.status == UPLOAD_FILE_START) {
     String filename = update.filename;
-    DBG_OUTPUT_PORT.printf("handleFileUpdate Name: %s\n", filename.c_str());
-    uint32_t maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
-    if (!Update.begin(maxSketchSpace)) {
-      Update.printError(DBG_OUTPUT_PORT);
+    fullSize = atoi(server.header("Content-Length").c_str());
+    DBG_OUTPUT_PORT.printf("handleFileUpdate Name: %s %d\n",
+      filename.c_str(), fullSize);
+    displayStatus(1, "HTTP Update start");
+    if (server.uri() == "/spiffsupdate") {
+      if (!Update.begin(fullSize, U_SPIFFS)) {
+        Update.printError(DBG_OUTPUT_PORT);
+      }
+    } else {
+      uint32_t maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000)
+        & 0xFFFFF000;
+      if (!Update.begin(maxSketchSpace)) {
+        Update.printError(DBG_OUTPUT_PORT);
+      }
     }
   } else if (update.status == UPLOAD_FILE_WRITE) {
-    if ((update.totalSize - priorPct) > 20000) {
-      priorPct = update.totalSize;
-      DBG_OUTPUT_PORT.printf("Update: %u\n", update.totalSize);
-      displayStatus(1, "HTTP Update %u", update.totalSize);
+    int p = update.totalSize / (fullSize / 100);
+    if ((p - priorPct) >= 5) {
+      priorPct = p;
+      DBG_OUTPUT_PORT.printf("Update: %u%%\n", p);
+      displayStatus(1, "HTTP Update %u%", p);
     }
     if (Update.write(update.buf, update.currentSize) != update.currentSize) {
       Update.printError(DBG_OUTPUT_PORT);
+      displayStatus(1, "HTTP Update Failed");
     }
   } else if (update.status == UPLOAD_FILE_END) {
     if (Update.end(true)) {
       DBG_OUTPUT_PORT.printf("Update Success: %u\nRebooting...\n",
         update.totalSize);
+      displayStatus(1, "HTTP Update End");
     } else {
       Update.printError(DBG_OUTPUT_PORT);
     }
   } else if (update.status == UPLOAD_FILE_ABORTED) {
     Update.end();
     DBG_OUTPUT_PORT.printf("Update aborted.\n");
+    displayStatus(1, "HTTP Update aborted");
   }
 }
-
+void afterFileUpdate() {
+  server.sendHeader("Location",
+    String(Update.hasError() ? "/updatefailed.html" :
+      "/updatesuccessful.html"), true);
+  server.send(301, "text/html", "");
+  doRestart();
+}
 
 void handleFileUpload() {
   if (server.uri() != "/edit") return;
@@ -389,10 +409,15 @@ void dumpSched(const char *m, struct _sched *s) {
 }
 #endif
 
-void doRestart() {
+void xxdoRestart() {
   ESP.restart();
 }
 
+void doRestart() {
+  displayStatus(0, "Restarting.....");
+  DBG_OUTPUT_PORT.printf("Restart in 5 seconds.\n");
+  timer.setTimeout(5000, []() { ESP.restart(); });
+}
 void computeNext(struct _sched *s) {
   if (now() < 10000000) {
     s->next = s->stop = 0;
@@ -445,8 +470,7 @@ void checkSched() {
       }
       if (sched[i].next > 0 && timeNow >= sched[i].next) {
         if (sched[i].zone == 100) {
-          delay(2000);
-          ESP.restart();
+          doRestart();
         } else {
           relayState |= (1 << (sched[i].zone - 1));
           setRelays();
@@ -972,6 +996,8 @@ void setup(void) {
   #endif
   DBG_OUTPUT_PORT.printf("\n\nESPrinkler2 %s compiled %s %s\n",
     VERSION, __DATE__, __TIME__);
+
+  DBG_OUTPUT_PORT.setTimeout(1000);
   u8g2.begin();
   u8g2.setFont(u8g2_font_helvR08_tf);
   u8g2.setFontRefHeightExtendedText();
@@ -1137,14 +1163,11 @@ void setup(void) {
     handleFileUpload);
 
   server.on("/update", HTTP_POST,
-    []() {
-      server.sendHeader("Location",
-        String(Update.hasError() ? "/updatefailed.html" :
-          "/updatesuccessful.html"), true);
-      server.send(301, "text/html", "");
-      timer.setTimeout(5000, doRestart);
-    },
+    afterFileUpdate,
     handleFileUpdate);
+  server.on("/spiffsupdate", HTTP_POST,
+      afterFileUpdate,
+      handleFileUpdate);
 
 
   server.on("/status", HTTP_GET, []() {
@@ -1220,9 +1243,7 @@ void setup(void) {
       "Restarting.... Wait a minute or so and then refresh.");
     relayState = 0;
     setRelays();
-    displayStatus(0, "Restarting.....");
-    DBG_OUTPUT_PORT.printf("Restart in 5 seconds.\n");
-    timer.setTimeout(5000, doRestart);
+    doRestart();
   });
 
   // called when the url is not defined here
@@ -1234,8 +1255,8 @@ void setup(void) {
     }
   });
 
-  const char * headerkeys[] = {"If-Modified-Since"};
-  server.collectHeaders(headerkeys, 1);
+  const char * headerkeys[] = {"If-Modified-Since", "Content-Length"};
+  server.collectHeaders(headerkeys, 2);
   server.begin();
   DBG_OUTPUT_PORT.printf("HTTP server started\n");
 
@@ -1278,4 +1299,24 @@ void loop(void) {
   server.handleClient();
   ArduinoOTA.handle();
   if (dnsStarted) dnsServer.processNextRequest();
+  if (DBG_OUTPUT_PORT.available()) {
+    String line = DBG_OUTPUT_PORT.readStringUntil('\r');
+    DBG_OUTPUT_PORT.printf("%s\n", line.c_str());
+
+    char buf[100];
+    line.toCharArray(buf, sizeof(buf));
+    char *p = buf;
+    char *str;
+    char *args[10];
+    int argc = 0;
+    while ((str = strtok_r(p, " ", &p)) != NULL && argc < 10) {
+      args[argc++] = str;
+    }
+    if (argc >= 3 && strcmp(args[0], "ap") == 0) {
+      strncpy(ssid, args[1], sizeof(ssid));
+      strncpy(password, args[2], sizeof(password));
+      eeSave();
+      doRestart();
+    }
+  }
 }

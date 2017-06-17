@@ -51,6 +51,14 @@
   }
   {
     type: "button"
+    icon: "toggle-up"
+    callback: "build:spiffs_ota"
+    tooltip: "Upload spiffs OTA"
+    iconset: "fa"
+    show: "Arduino"
+  }
+  {
+    type: "button"
     icon: "question-circle"
     callback: "build:select-active-target"
     tooltip: "Build Choose Target"

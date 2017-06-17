@@ -10,10 +10,11 @@ var pathToArduino = '..\\..\\..\\ides\\arduino-1.8.3\\';
 var pathRunArduino = pathToArduino + 'arduino_debug.exe';
 var pathRunMkspiffs = pathToArduino + 'portable\\packages\\esp8266\\tools\\mkspiffs\\0.1.2\\mkspiffs.exe';
 var pathRunEsptool = pathToArduino + 'portable\\packages\\esp8266\\tools\\esptool\\0.4.9\\esptool.exe';
+var pathRunEspOta = pathToArduino + 'portable\\packages\\esp8266\\hardware\\esp8266\\2.3.0\\tools\\espota.py';
 var pathRunTerminal = '..\\..\\..\\terminal\\termie.exe';
 var pathRunGzip = '..\\..\\..\\Utility\\gzip.exe';
 var port = 'COM4';
-var otaPort = '172.30.1.77';
+var otaPort = '172.30.1.76';
 var terminalBaud = '74880';
 var resetMethod = 'nodemcu';
 var terminalProcess = null;
@@ -200,6 +201,29 @@ module.exports = {
         '-cf', '{PROJECT_PATH}/build/spiffs.bin'
       ],
       postBuild: terminalStart
+    },
+    spiffs_ota:
+    {
+      atomCommandName: 'build:spiffs_ota',
+      cmd: 'echo Prep and Upload spiffs',
+      args: [
+        '&&', 'xcopy data-uncompressed\\* data\\ /s /y',
+        '&&', pathRunGzip, '-v', '-f',
+        'data/*.html',
+        'data/*.css',
+        'data/*.js',
+        'data/*-schema.json',
+        '&&', pathRunMkspiffs,
+        '-c', 'data',
+        '-p', spiffs.spiPage,
+        '-b', spiffs.spiBlock,
+        '-s', (spiffs.spiEnd - spiffs.spiStart),
+        'build/spiffs.bin',
+        '&&', 'python ' + pathRunEspOta,
+        '-i', otaPort,
+        '-s',
+        '-f', '{PROJECT_PATH}/build/spiffs.bin'
+      ]
     },
     terminal:
     {
