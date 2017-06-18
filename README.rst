@@ -98,6 +98,12 @@ and SDA (GPIO4) of the ESP8266.
 For the optional real time clock (pcf8563 or ds1307), I rigged that up on a
 proto board stacked on the D1 Mini using stacking pins.
 
+The following schematic can be used as a guide.  A Fritzing file is also
+included.  It is also just a guide.  Again DIY assembly and soldering skills
+are required to complete this project.
+
+.. figure:: ESPrinkler2_schem.jpg
+   :alt: ESPrinkler2 Guide Schematic
 
 Software
 ~~~~~~~~
